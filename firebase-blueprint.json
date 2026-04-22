@@ -1,0 +1,119 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and settings",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "instructor", "student"] },
+        "instructorId": { "type": "string" },
+        "subscription": {
+          "type": "object",
+          "properties": {
+            "status": { "type": "string", "enum": ["active", "inactive", "pending"] },
+            "updatedAt": { "type": "string", "format": "date-time" }
+          }
+        }
+      },
+      "required": ["uid", "name", "email", "role"]
+    },
+    "Workout": {
+      "title": "Workout",
+      "description": "Workout routine for a student",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "instructorId": { "type": "string" },
+        "exercises": { "type": "array" },
+        "date": { "type": "string", "format": "date" },
+        "studentName": { "type": "string" }
+      },
+      "required": ["studentId", "exercises", "date"]
+    },
+    "Water": {
+      "title": "Water",
+      "description": "Daily water intake",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "ml": { "type": "number" },
+        "date": { "type": "string", "format": "date" }
+      },
+      "required": ["studentId", "ml", "date"]
+    },
+    "Financial": {
+      "title": "Financial Record",
+      "description": "Income or expense record",
+      "type": "object",
+      "properties": {
+        "instructorId": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["income", "expense"] },
+        "description": { "type": "string" },
+        "date": { "type": "string", "format": "date" }
+      },
+      "required": ["instructorId", "amount", "type", "description", "date"]
+    },
+    "Assessment": {
+      "title": "Physical Assessment",
+      "description": "Physical measurement record",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "instructorId": { "type": "string" },
+        "weight": { "type": "number" },
+        "height": { "type": "number" },
+        "bodyFat": { "type": "number" },
+        "muscleMass": { "type": "number" },
+        "bodyWater": { "type": "number" },
+        "visceralFat": { "type": "number" },
+        "imc": { "type": "number" },
+        "date": { "type": "string", "format": "date" },
+        "measurements": { "type": "object" }
+      },
+      "required": ["studentId", "weight", "height", "date"]
+    },
+    "Meal": {
+      "title": "Meal Analysis",
+      "description": "AI meal analysis record",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "mealDescription": { "type": "string" },
+        "analysis": { "type": "string" },
+        "calories": { "type": "number" },
+        "date": { "type": "string", "format": "date" }
+      },
+      "required": ["studentId", "mealDescription", "analysis", "calories", "date"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/workouts/{workoutId}": {
+      "schema": "Workout",
+      "description": "Workout routines"
+    },
+    "/water/{waterId}": {
+      "schema": "Water",
+      "description": "Water intake tracking"
+    },
+    "/financials/{finId}": {
+      "schema": "Financial",
+      "description": "Financial records"
+    },
+    "/assessments/{assId}": {
+      "schema": "Assessment",
+      "description": "Physical assessments"
+    },
+    "/meals/{mealId}": {
+      "schema": "Meal",
+      "description": "Meal analyses"
+    }
+  }
+}

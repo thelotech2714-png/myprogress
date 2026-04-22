@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: myprogress-backend
+    runtime: node
+    buildCommand: npm install && cd backend && npm install
+    startCommand: npm start
+    envVars:
+      - key: GEMINI_API_KEY
+        scope: build,runtime
+      - key: STRIPE_SECRET_KEY
+        scope: runtime
+      - key: STRIPE_WEBHOOK_SECRET
+        scope: runtime
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        scope: runtime
+      - key: PORT
+        value: 5000
