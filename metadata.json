@@ -1,0 +1,6 @@
+{
+  "name": "Myprogress",
+  "description": "Sistema completo de gestão educacional com design brutalista e dashboards para administradores, instrutores, alunos e centros.",
+  "requestFramePermissions": ["camera", "geolocation"],
+  "majorCapabilities": []
+}

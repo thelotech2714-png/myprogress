@@ -1,0 +1,170 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return request.auth.token.email_verified == true;
+    }
+
+    function isSystemOwner() {
+      return request.auth.token.email != null && request.auth.token.email in [
+        'thelo.tech2714@gmail.com',
+        'jeferson.executiva.net@gmail.com'
+      ];
+    }
+
+    // The Eight Pillars mandate email verification, but we allow system owner to bypass for test accounts
+    function isVerifiedUser() {
+      return isEmailVerified() || isSystemOwner();
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        isSystemOwner() || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    function isInstructor() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'instructor';
+    }
+
+    // --- Users Collection ---
+    match /users/{userId} {
+      function isValidUser(data) {
+        return data.keys().hasAll(['uid', 'email', 'name', 'role', 'status', 'createdAt'])
+          && data.uid is string && data.uid.size() <= 128
+          && data.email is string && data.email.size() <= 256
+          && data.name is string && data.name.size() <= 256
+          && data.role in ['admin', 'instructor', 'student']
+          && data.status in ['pending', 'active', 'blocked']
+          && data.createdAt is timestamp;
+      }
+
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      
+      allow create: if isSignedIn() 
+        && request.auth.uid == userId 
+        && isValidUser(incoming())
+        && incoming().uid == request.auth.uid
+        && (
+          (isSystemOwner() && (incoming().role == 'admin' || incoming().status == 'active')) ||
+          (incoming().role != 'admin' && incoming().status == 'pending')
+        );
+
+      allow update: if isSignedIn() && (
+        (isAdmin() && incoming().uid == existing().uid && incoming().createdAt == existing().createdAt) ||
+        (request.auth.uid == userId && incoming().diff(existing()).affectedKeys().hasAny(['name', 'photoURL']))
+      );
+    }
+
+    // --- Instructors Collection ---
+    match /instructors/{instructorId} {
+      function isValidInstructor(data) {
+        return data.keys().hasAll(['userId', 'phone', 'plan', 'paymentStatus', 'updatedAt'])
+          && data.userId == instructorId
+          && data.paymentStatus in ['pending', 'approved', 'rejected'];
+      }
+
+      allow read: if isSignedIn() && (request.auth.uid == instructorId || isAdmin());
+      
+      allow create: if isSignedIn() 
+        && request.auth.uid == instructorId
+        && isValidInstructor(incoming())
+        && (isSystemOwner() || incoming().paymentStatus == 'pending');
+
+      allow update: if isAdmin() || (
+        isSignedIn() && request.auth.uid == instructorId 
+        && (incoming().diff(existing()).affectedKeys().hasAny(['phone', 'plan', 'updatedAt', 'experiencia', 'especialidade']))
+        && incoming().paymentStatus == existing().paymentStatus
+      );
+    }
+
+    // --- Progress Photos Collection ---
+    match /progress_photos/{photoId} {
+      function isValidProgressPhoto(data) {
+        return data.keys().hasAll(['studentId', 'url', 'type', 'date'])
+          && data.studentId is string
+          && data.type in ['before', 'after']
+          && data.date is timestamp;
+      }
+      allow read: if isSignedIn() && (
+        resource.data.studentId == request.auth.uid || 
+        isAdmin() || 
+        (isInstructor() && get(/databases/$(database)/documents/students/$(resource.data.studentId)).data.instructorId == request.auth.uid)
+      );
+      allow create: if isSignedIn() && incoming().studentId == request.auth.uid && isValidProgressPhoto(incoming());
+      allow delete: if isSignedIn() && resource.data.studentId == request.auth.uid;
+    }
+
+    // --- Payment Approvals Collection ---
+    match /payment_approvals/{approvalId} {
+      allow read: if isSignedIn() && (resource.data.instructorId == request.auth.uid || isAdmin());
+      
+      allow create: if isSignedIn() 
+        && incoming().instructorId == request.auth.uid
+        && (isSystemOwner() || incoming().status == 'pending');
+
+      allow update: if isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'amount']);
+    }
+
+    // --- Students Collection ---
+    match /students/{studentId} {
+      function isValidStudent(data) {
+        return data.keys().hasAll(['userId', 'instructorId', 'accessReleased', 'status', 'plan'])
+          && data.userId is string
+          && data.instructorId is string;
+      }
+      allow read: if isSignedIn() && (
+        request.auth.uid == studentId || 
+        (isInstructor() && resource.data.instructorId == request.auth.uid) ||
+        isAdmin()
+      );
+
+      allow create: if isSignedIn() && (isInstructor() || isAdmin()) && isValidStudent(incoming());
+      allow update: if isAdmin() || (isInstructor() && existing().instructorId == request.auth.uid);
+    }
+
+    // --- Messages Collection ---
+    match /messages/{messageId} {
+      function isValidMessage(data) {
+        return data.keys().hasAll(['fromId', 'fromName', 'toId', 'content', 'type', 'createdAt'])
+          && data.fromId == request.auth.uid
+          && data.content is string && data.content.size() <= 2000
+          && data.type in ['support', 'chat'];
+      }
+      allow read: if isSignedIn() && (resource.data.fromId == request.auth.uid || resource.data.toId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidMessage(incoming());
+    }
+
+    // --- Notifications Collection ---
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && (resource.data.toId == request.auth.uid || (resource.data.toId == 'admin' && isAdmin()));
+      allow create: if isSignedIn(); // Basic notification creation
+      allow update: if isSignedIn() && (resource.data.toId == request.auth.uid || (resource.data.toId == 'admin' && isAdmin())) 
+        && incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+    }
+  }
+}

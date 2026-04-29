@@ -1,0 +1,130 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "General user data and role assignment",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "instructor", "student"] },
+        "status": { "type": "string", "enum": ["pending", "active", "blocked"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role", "status"]
+    },
+    "ProgressPhoto": {
+      "title": "Progress Photo",
+      "description": "Before and after progress photos for students",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "url": { "type": "string" },
+        "type": { "type": "string", "enum": ["before", "after"] },
+        "date": { "type": "string", "format": "date-time" },
+        "note": { "type": "string" }
+      },
+      "required": ["studentId", "url", "type", "date"]
+    },
+    "Instructor": {
+      "title": "Instructor Details",
+      "description": "Extended information for instructors",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "phone": { "type": "string" },
+        "plan": { "type": "string" },
+        "paymentStatus": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "lastPaymentDate": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "plan", "paymentStatus"]
+    },
+    "Student": {
+      "title": "Student Details",
+      "description": "Student relationship with instructor and access status",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "instructorId": { "type": "string" },
+        "accessReleased": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["active", "inactive"] }
+      },
+      "required": ["userId", "instructorId", "accessReleased"]
+    },
+    "PaymentApproval": {
+      "title": "Payment Approval Request",
+      "description": "Request for admin to approve a payment",
+      "type": "object",
+      "properties": {
+        "instructorId": { "type": "string" },
+        "instructorName": { "type": "string" },
+        "plan": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Message": {
+      "title": "Direct Message",
+      "description": "Communication between users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fromId": { "type": "string" },
+        "fromName": { "type": "string" },
+        "toId": { "type": "string" },
+        "content": { "type": "string" },
+        "type": { "type": "string", "enum": ["support", "chat"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fromId", "toId", "content", "type"]
+    },
+    "Notification": {
+      "title": "System Notification",
+      "description": "Alerts for admin or other users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "toId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["toId", "title", "message", "read"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Core user document for authentication and permissions"
+    },
+    "/instructors/{instructorId}": {
+      "schema": "Instructor",
+      "description": "Detailed instructor metadata"
+    },
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Mapping of students to instructors and their access"
+    },
+    "/payment_approvals/{approvalId}": {
+      "schema": "PaymentApproval",
+      "description": "Queue for admin to approve new instructor payments"
+    },
+    "/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Chat messages between users"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User or admin alerts"
+    },
+    "/progress_photos/{photoId}": {
+      "schema": "ProgressPhoto",
+      "description": "Student progress tracking images"
+    }
+  }
+}
