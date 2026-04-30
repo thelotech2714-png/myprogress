@@ -1,8 +1,25 @@
+# Dependências
 node_modules/
+
+# Builds
 build/
 dist/
 coverage/
-.DS_Store
+
+# Vercel
+.vercel/
+
+# Android (Capacitor)
+android/.idea/
+android/build/
+android/app/build/
+
+# Logs
 *.log
+
+# Sistema
+.DS_Store
+
+# Variáveis de ambiente
 .env*
 !.env.example
