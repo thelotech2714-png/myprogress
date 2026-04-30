@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Send, X, User, Sparkles, Loader2, Bot } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -9,6 +9,13 @@ export const ChatAssistant: React.FC = () => {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, isLoading]);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -35,10 +42,10 @@ export const ChatAssistant: React.FC = () => {
       </button>
 
       <div className={cn(
-        "fixed bottom-28 right-8 w-96 bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col z-50 transition-all duration-500 origin-bottom-right",
+        "fixed bottom-28 right-8 w-[380px] h-[550px] max-h-[calc(100vh-140px)] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col z-50 transition-all duration-500 origin-bottom-right",
         isOpen ? "scale-100 opacity-100" : "scale-0 opacity-0 pointer-events-none"
       )}>
-        <div className="p-4 bg-slate-900 rounded-t-3xl flex items-center justify-between">
+        <div className="p-4 bg-slate-900 rounded-t-3xl flex items-center justify-between border-b border-slate-800">
            <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
                  <Bot className="w-6 h-6 text-white" />
@@ -48,12 +55,15 @@ export const ChatAssistant: React.FC = () => {
                  <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">Online</span>
               </div>
            </div>
-           <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-white">
+           <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-white p-2 hover:bg-white/10 rounded-lg transition-colors">
               <X className="w-5 h-5" />
            </button>
         </div>
 
-        <div className="flex-1 p-4 overflow-y-auto max-h-[400px] space-y-4 scrollbar-thin">
+        <div 
+          ref={scrollRef}
+          className="flex-1 p-4 overflow-y-auto space-y-4 scroll-smooth"
+        >
            {messages.map((m, i) => (
              <div key={i} className={cn(
                "flex",

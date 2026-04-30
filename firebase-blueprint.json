@@ -11,6 +11,7 @@
         "photoURL": { "type": "string" },
         "role": { "type": "string", "enum": ["admin", "instructor", "student"] },
         "status": { "type": "string", "enum": ["pending", "active", "blocked"] },
+        "fcmTokens": { "type": "array", "items": { "type": "string" } },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "email", "role", "status"]

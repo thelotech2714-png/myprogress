@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
-import { CheckCircle2, ChevronRight, Play, Dumbbell, Clock, Zap, Target, ChevronDown, ChevronUp, X } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { CheckCircle2, ChevronRight, Play, Dumbbell, Clock, Zap, Target, ChevronDown, ChevronUp, X, Timer, ArrowRight, ArrowLeft, Loader2 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { auth } from '../lib/firebase';
+import { firebaseService } from '../services/firebaseService';
 
 interface Exercise {
   id: string;
@@ -42,8 +44,62 @@ export const StudentWorkout: React.FC = () => {
   const [allWorkouts, setAllWorkouts] = useState(initialWorkoutsState);
   const [isFinished, setIsFinished] = useState(false);
   const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    const fetchWorkout = async () => {
+      if (!auth.currentUser) {
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        const workout = await firebaseService.getStudentWorkout(auth.currentUser.uid);
+        if (workout) {
+          setAllWorkouts(workout);
+        }
+      } catch (error) {
+        console.error("Error fetching workout:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchWorkout();
+  }, []);
+
+  // Execution Mode States
+  const [isExecutionMode, setIsExecutionMode] = useState(false);
+  const [currentExIndex, setCurrentExIndex] = useState(0);
+  const [restTimer, setRestTimer] = useState(0);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const timerInterval = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (isTimerRunning && restTimer > 0) {
+      timerInterval.current = setInterval(() => {
+        setRestTimer(prev => {
+          if (prev <= 1) {
+             clearInterval(timerInterval.current!);
+             setIsTimerRunning(false);
+             return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      if (timerInterval.current) clearInterval(timerInterval.current);
+    }
+    return () => { if (timerInterval.current) clearInterval(timerInterval.current); };
+  }, [isTimerRunning, restTimer]);
 
   const exercises = allWorkouts[activeWorkout];
+
+  const startRest = (seconds: string) => {
+    const sec = parseInt(seconds.replace('s', '')) || 60;
+    setRestTimer(sec);
+    setIsTimerRunning(true);
+  };
 
   const toggleDone = (id: string) => {
     setAllWorkouts(prev => ({
@@ -62,6 +118,20 @@ export const StudentWorkout: React.FC = () => {
     }
     setIsFinished(true);
   };
+
+  const startExecution = () => {
+    setIsExecutionMode(true);
+    setCurrentExIndex(0);
+  };
+
+  if (loading) {
+    return (
+      <div className="card-standard p-12 bg-white text-center flex flex-col items-center">
+        <Loader2 className="w-10 h-10 animate-spin text-blue-600 mb-4" />
+        <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">Carregando seu treino personalizado...</p>
+      </div>
+    );
+  }
 
   if (isFinished) {
     return (
@@ -178,12 +248,166 @@ export const StudentWorkout: React.FC = () => {
 
       <div className="mt-8 pt-8 border-t border-slate-100 flex flex-col md:flex-row gap-4">
          <button 
+           onClick={startExecution}
+           className="flex-1 py-4 bg-slate-900 text-white font-black text-sm uppercase tracking-widest rounded-xl hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/10 flex items-center justify-center gap-3"
+         >
+            <Play className="w-5 h-5 fill-current" />
+            Iniciar Treino
+         </button>
+         <button 
            onClick={handleFinish}
            className="flex-1 py-4 bg-blue-600 text-white font-black text-sm uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/10"
          >
             Finalizar Treino
          </button>
       </div>
+
+      {/* Execution Mode Fullscreenish Overlay */}
+      {isExecutionMode && (
+        <div className="fixed inset-0 bg-white z-[7000] flex flex-col animate-in slide-in-from-bottom-full duration-500">
+           <div className="p-6 md:p-8 bg-slate-900 text-white flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-4">
+                 <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center">
+                    <Dumbbell className="w-6 h-6 text-white" />
+                 </div>
+                 <div>
+                    <h3 className="text-xl font-black uppercase italic tracking-tight">Treino {activeWorkout} em Execução</h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Foco e Intensidade Máxima</p>
+                 </div>
+              </div>
+              <button 
+                onClick={() => {
+                  if (confirm('Deseja sair do modo de execução? Seu progresso será mantido.')) {
+                    setIsExecutionMode(false);
+                    setIsTimerRunning(false);
+                  }
+                }} 
+                className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all"
+              >
+                 <X className="w-6 h-6" />
+              </button>
+           </div>
+
+           <div className="flex-1 relative overflow-hidden">
+              <div className="absolute inset-0 p-6 md:p-12 overflow-y-auto flex flex-col items-center">
+                 <div className="w-full max-w-2xl space-y-8">
+                    {/* Progress Bar */}
+                    <div className="flex items-center gap-4">
+                       <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-blue-600 transition-all duration-500" 
+                            style={{ width: `${((currentExIndex + 1) / exercises.length) * 100}%` }} 
+                          />
+                       </div>
+                       <span className="text-sm font-black text-slate-400">{currentExIndex + 1} / {exercises.length}</span>
+                    </div>
+
+                    {/* Current Exercise Card */}
+                    <div className="bg-slate-50 border border-slate-100 rounded-[3rem] p-8 md:p-12 text-center shadow-xl shadow-slate-200/50">
+                       <div className="flex justify-center mb-6">
+                          <div className="relative">
+                             <div className="absolute inset-0 bg-blue-600 rounded-full blur-2xl opacity-10 animate-pulse" />
+                             <h4 className="text-3xl md:text-5xl font-black text-slate-900 uppercase italic tracking-tight relative break-words">
+                                {exercises[currentExIndex].name}
+                             </h4>
+                          </div>
+                       </div>
+
+                       <div className="grid grid-cols-3 gap-4 mb-12">
+                          <div className="p-4 bg-white rounded-3xl border border-slate-100">
+                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Séries</p>
+                             <p className="text-2xl font-black text-slate-900">{exercises[currentExIndex].sets}</p>
+                          </div>
+                          <div className="p-4 bg-white rounded-3xl border border-slate-100">
+                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Reps</p>
+                             <p className="text-2xl font-black text-slate-900">{exercises[currentExIndex].reps}</p>
+                          </div>
+                          <div className="p-4 bg-white rounded-3xl border border-slate-100">
+                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Carga</p>
+                             <p className="text-2xl font-black text-blue-600">{exercises[currentExIndex].load}</p>
+                          </div>
+                       </div>
+
+                       <div className="flex flex-col md:flex-row gap-4">
+                          <button 
+                            onClick={() => startRest(exercises[currentExIndex].rest)}
+                            className="flex-1 py-6 bg-slate-900 text-white rounded-[2rem] font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/10"
+                          >
+                             <Timer className={cn("w-5 h-5", isTimerRunning && "animate-spin")} />
+                             Descansar ({exercises[currentExIndex].rest})
+                          </button>
+                          <button 
+                            onClick={() => {
+                               toggleDone(exercises[currentExIndex].id);
+                               if (currentExIndex < exercises.length - 1) {
+                                  setCurrentExIndex(prev => prev + 1);
+                                  setIsTimerRunning(false);
+                                  setRestTimer(0);
+                               } else {
+                                  setIsExecutionMode(false);
+                                  setIsFinished(true);
+                               }
+                            }}
+                            className="flex-1 py-6 bg-blue-600 text-white rounded-[2rem] font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20"
+                          >
+                             <CheckCircle2 className="w-5 h-5" />
+                             Concluir Exercício
+                          </button>
+                       </div>
+                    </div>
+
+                    {/* Rest Timer Overlay (If active) */}
+                    {restTimer > 0 && (
+                      <div className="p-8 bg-blue-600 rounded-[2.5rem] text-white flex items-center justify-between animate-in zoom-in duration-300 shadow-2xl shadow-blue-600/30">
+                         <div className="flex items-center gap-4">
+                            <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md">
+                               <Timer className="w-8 h-8 animate-pulse" />
+                            </div>
+                            <div>
+                               <h5 className="text-2xl font-black italic uppercase tracking-tight">Tempo de Descanso</h5>
+                               <p className="text-xs font-bold text-blue-100 uppercase tracking-widest">Recupere-se para a próxima série</p>
+                            </div>
+                         </div>
+                         <div className="text-5xl font-black tabular-nums">{restTimer}s</div>
+                      </div>
+                    )}
+
+                    {/* Navigation Buttons */}
+                    <div className="flex justify-between items-center pt-8">
+                       <button 
+                         disabled={currentExIndex === 0}
+                         onClick={() => setCurrentExIndex(prev => prev - 1)}
+                         className="flex items-center gap-2 text-slate-400 hover:text-slate-900 font-bold uppercase tracking-widest text-[10px] disabled:opacity-30"
+                       >
+                          <ArrowLeft className="w-4 h-4" /> Anterior
+                       </button>
+
+                       <div className="flex gap-2">
+                          <button 
+                            onClick={() => {
+                              const url = exercises[currentExIndex].videoUrl;
+                              if (url && url !== '#') setSelectedVideoUrl(url);
+                              else alert('Vídeo não disponível');
+                            }}
+                            className="p-4 bg-slate-100 text-slate-600 rounded-2xl hover:bg-slate-200 transition-all"
+                          >
+                             <Play className="w-5 h-5 fill-current" />
+                          </button>
+                       </div>
+
+                       <button 
+                         disabled={currentExIndex === exercises.length - 1}
+                         onClick={() => setCurrentExIndex(prev => prev + 1)}
+                         className="flex items-center gap-2 text-slate-400 hover:text-slate-900 font-bold uppercase tracking-widest text-[10px] disabled:opacity-30"
+                       >
+                          Próximo <ArrowRight className="w-4 h-4" />
+                       </button>
+                    </div>
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
 
       {/* Video Modal */}
       {selectedVideoUrl && (

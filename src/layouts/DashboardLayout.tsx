@@ -19,6 +19,7 @@ import { cn } from '../lib/utils';
 import { UserRole } from '../types/auth';
 import { auth } from '../lib/firebase';
 import { firebaseService } from '../services/firebaseService';
+import { notificationService } from '../services/notificationService';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -54,6 +55,21 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, user
   const items = navItems[userRole] || [];
 
   useEffect(() => {
+    const initFCM = async () => {
+      // Small delay to ensure auth is fully ready
+      setTimeout(async () => {
+        if (auth.currentUser) {
+          await notificationService.requestPermission();
+          
+          notificationService.onMessageListener().then((payload: any) => {
+            console.log('Foreground message:', payload);
+          });
+        }
+      }, 2000);
+    };
+
+    initFCM();
+
     const handleClickOutside = (event: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
         setIsNotifOpen(false);

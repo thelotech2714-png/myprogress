@@ -317,6 +317,68 @@ export const InstructorDashboard: React.FC = () => {
     link.click();
   };
 
+  const [selectedExercises, setSelectedExercises] = useState<any[]>([]);
+
+  const handleSaveWorkout = async () => {
+    if (!selectedStudent || !auth.currentUser) return;
+    
+    // Find student ID by name (this is a bit hacky, but the state only has 'name')
+    // Actually, registeredStudents has the ID
+    const student = registeredStudents.find(s => s.name === selectedStudent);
+    if (!student) {
+      alert('Aluno não encontrado para salvar treino.');
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      // Map exercises to the format expected by StudentWorkout
+      const workoutData = {
+        A: selectedExercises.map((ex, i) => ({
+          id: ex.id,
+          name: ex.name,
+          sets: 4,
+          reps: '10-12',
+          load: 'A ajustar',
+          rest: '60s',
+          done: false,
+          videoUrl: ex.videoUrl || '#'
+        })),
+        B: [],
+        C: []
+      };
+
+      await firebaseService.saveStudentWorkout(student.id, workoutData);
+      alert('Treino salvo e enviado para o aluno!');
+      setSelectedExercises([]);
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao salvar treino.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleGenerateAISuggestion = async () => {
+    if (!selectedStudent) return;
+    setIsGenerating(true);
+    try {
+      // Simulate AI generation by taking some exercises from the library
+      // In a real app, this would use Gemini
+      const suggestedExercises = [
+         { id: '1', name: 'Agachamento com Barra', videoUrl: 'https://www.youtube.com/embed/SW_C1A-rejs' },
+         { id: '2', name: 'Supino Reto', videoUrl: 'https://www.youtube.com/embed/vthMCtgVtFw' },
+         { id: '3', name: 'Remada Curvada', videoUrl: 'https://www.youtube.com/embed/RQU8wZ6v_f0' }
+      ];
+      setSelectedExercises(suggestedExercises);
+      alert('Sugestão de treino gerada! Revise abaixo e salve.');
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -593,11 +655,32 @@ export const InstructorDashboard: React.FC = () => {
                       <Zap className="w-6 h-6 text-blue-400 fill-blue-400" />
                       <h3 className="text-lg font-bold">Prescrição Inteligente (IA)</h3>
                    </div>
+                   {selectedExercises.length > 0 && (
+                      <div className="mb-6 p-4 bg-white/5 rounded-2xl border border-white/10 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                         <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Treino Sugerido:</p>
+                         <div className="flex flex-wrap gap-2">
+                            {selectedExercises.map(ex => (
+                               <span key={ex.id} className="px-3 py-1 bg-white/10 rounded-lg text-[10px] font-bold border border-white/5 uppercase tracking-tight">{ex.name}</span>
+                            ))}
+                         </div>
+                         <button 
+                           onClick={handleSaveWorkout}
+                           disabled={isGenerating}
+                           className="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-500 transition-all text-xs uppercase tracking-widest shadow-lg shadow-emerald-600/20 disabled:opacity-50"
+                         >
+                            {isGenerating ? 'Salvando...' : 'Confirmar e Enviar Treino'}
+                         </button>
+                      </div>
+                   )}
                    <p className="text-slate-400 text-sm leading-relaxed mb-8">
                       Clique abaixo para que a IA gere uma sugestão de progressão de carga e novos exercícios baseados no histórico de {selectedStudent}.
                    </p>
-                   <button className="w-full py-4 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 transition-all flex items-center justify-center gap-2">
-                      <Zap className="w-4 h-4" /> Gerar Sugestão de Treino A/B/C
+                   <button 
+                     onClick={handleGenerateAISuggestion}
+                     disabled={isGenerating}
+                     className="w-full py-4 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 transition-all flex items-center justify-center gap-2"
+                   >
+                     <Zap className="w-4 h-4" /> {isGenerating ? 'Analisando...' : 'Gerar Sugestão de Treino A/B/C'}
                    </button>
                 </div>
              </div>

@@ -40,6 +40,19 @@ import { HomeWorkout } from '../components/HomeWorkout';
 
 import { auth, db } from '../lib/firebase';
 import { onSnapshot, collection, query, where, orderBy, limit } from 'firebase/firestore';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip as RechartsTooltip, 
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  AreaChart,
+  Area
+} from 'recharts';
 
 export const StudentDashboard: React.FC = () => {
   const [aiTip, setAiTip] = useState("Carregando sua dica personalizada...");
@@ -75,6 +88,7 @@ export const StudentDashboard: React.FC = () => {
     }
   };
 
+  const [isFullStatsOpen, setIsFullStatsOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isWaterModalOpen, setIsWaterModalOpen] = useState(false);
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
@@ -499,7 +513,12 @@ export const StudentDashboard: React.FC = () => {
                  </div>
               ))}
            </div>
-           <button className="w-full mt-12 py-4 bg-blue-600 text-white font-bold text-sm rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/20 uppercase tracking-widest">Estatísticas Completas</button>
+           <button 
+             onClick={() => setIsFullStatsOpen(true)}
+             className="w-full mt-12 py-4 bg-blue-600 text-white font-bold text-sm rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/20 uppercase tracking-widest"
+           >
+             Estatísticas Completas
+           </button>
         </div>
       </div>
       {/* History Modal */}
@@ -744,7 +763,7 @@ export const StudentDashboard: React.FC = () => {
                           </div>
                         ) : (
                           progressPhotos.filter(p => p.type === 'before').map(photo => (
-                            <div key={photo.id} className="group relative aspect-[3/4] bg-slate-100 rounded-2xl overflow-hidden border-2 border-white shadow-md">
+                            <div key={`${photo.id}-before`} className="group relative aspect-[3/4] bg-slate-100 rounded-2xl overflow-hidden border-2 border-white shadow-md">
                                <img src={photo.url} className="w-full h-full object-cover" alt="Before" />
                                <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/60 to-transparent">
                                   <p className="text-[8px] font-bold text-white uppercase tracking-widest">{photo.date?.toDate?.()?.toLocaleDateString()}</p>
@@ -775,7 +794,7 @@ export const StudentDashboard: React.FC = () => {
                           </div>
                         ) : (
                           progressPhotos.filter(p => p.type === 'after').map(photo => (
-                            <div key={photo.id} className="group relative aspect-[3/4] bg-slate-100 rounded-2xl overflow-hidden border-2 border-white shadow-md">
+                            <div key={`${photo.id}-after`} className="group relative aspect-[3/4] bg-slate-100 rounded-2xl overflow-hidden border-2 border-white shadow-md">
                                <img src={photo.url} className="w-full h-full object-cover" alt="After" />
                                <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/60 to-transparent">
                                   <p className="text-[8px] font-bold text-white uppercase tracking-widest">{photo.date?.toDate?.()?.toLocaleDateString()}</p>
@@ -797,6 +816,132 @@ export const StudentDashboard: React.FC = () => {
                </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Full Stats Modal */}
+      {isFullStatsOpen && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[6000] flex items-center justify-center p-4">
+           <div className="bg-slate-50 w-full max-w-5xl h-full md:h-[90vh] md:rounded-[3rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in duration-500">
+              <div className="p-8 bg-slate-900 text-white flex justify-between items-center shrink-0">
+                 <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-600/20">
+                       <TrendingUp className="w-8 h-8 text-white" />
+                    </div>
+                    <div>
+                       <h3 className="text-2xl font-black uppercase tracking-tight italic">Estatísticas Completas</h3>
+                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Relatório Detalhado de Performance</p>
+                    </div>
+                 </div>
+                 <button onClick={() => setIsFullStatsOpen(false)} className="p-3 hover:bg-white/10 rounded-2xl transition-all">
+                    <X className="w-6 h-6" />
+                 </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-8">
+                 {/* Top Charts */}
+                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl shadow-slate-200/50">
+                       <div className="flex justify-between items-center mb-8">
+                          <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest">Volume Semanal (KG)</h4>
+                          <Zap className="w-4 h-4 text-orange-500" />
+                       </div>
+                       <div className="h-64 w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                             <AreaChart data={[
+                                { day: 'Seg', volume: 1200 },
+                                { day: 'Ter', volume: 2100 },
+                                { day: 'Qua', volume: 1800 },
+                                { day: 'Qui', volume: 2400 },
+                                { day: 'Sex', volume: 1100 },
+                                { day: 'Sáb', volume: 2900 },
+                                { day: 'Dom', volume: 800 },
+                             ]}>
+                                <defs>
+                                   <linearGradient id="colorVolume" x1="0" y1="0" x2="0" y2="1">
+                                      <stop offset="5%" stopColor="#2563eb" stopOpacity={0.1}/>
+                                      <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
+                                   </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold', fill: '#94a3b8'}} />
+                                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold', fill: '#94a3b8'}} />
+                                <RechartsTooltip 
+                                   contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                                   labelStyle={{ fontWeight: 'black', marginBottom: '4px', textTransform: 'uppercase', fontSize: '10px' }}
+                                />
+                                <Area type="monotone" dataKey="volume" stroke="#2563eb" strokeWidth={3} fillOpacity={1} fill="url(#colorVolume)" />
+                             </AreaChart>
+                          </ResponsiveContainer>
+                       </div>
+                    </div>
+
+                    <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl shadow-slate-200/50">
+                       <div className="flex justify-between items-center mb-8">
+                          <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest">Frequência Mensal</h4>
+                          <Activity className="w-4 h-4 text-emerald-500" />
+                       </div>
+                       <div className="h-64 w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                             <BarChart data={[
+                                { week: 'Semana 1', treinos: 5 },
+                                { week: 'Semana 2', treinos: 4 },
+                                { week: 'Semana 3', treinos: 6 },
+                                { week: 'Semana 4', treinos: 5 },
+                             ]}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <XAxis dataKey="week" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold', fill: '#94a3b8'}} />
+                                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold', fill: '#94a3b8'}} />
+                                <RechartsTooltip 
+                                   contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                                   cursor={{ fill: '#f8fafc' }}
+                                />
+                                <Bar dataKey="treinos" fill="#2563eb" radius={[6, 6, 0, 0]} barSize={40} />
+                             </BarChart>
+                          </ResponsiveContainer>
+                       </div>
+                    </div>
+                 </div>
+
+                 {/* Detailed Metrics List */}
+                 <div className="bg-white p-8 rounded-[2rem] border border-slate-100">
+                    <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-8">Evolução de Cargas (Principais)</h4>
+                    <div className="space-y-6">
+                       {[
+                          { name: 'Supino Reto', initial: '40kg', current: '75kg', evolution: '+87%', color: 'blue' },
+                          { name: 'Agachamento Livre', initial: '50kg', current: '110kg', evolution: '+120%', color: 'emerald' },
+                          { name: 'Puxada Frontal', initial: '35kg', current: '60kg', evolution: '+71%', color: 'orange' },
+                          { name: 'Leg Press 45', initial: '120kg', current: '240kg', evolution: '+100%', color: 'purple' },
+                       ].map((item, i) => (
+                          <div key={i} className="flex items-center justify-between p-6 bg-slate-50 rounded-2xl border border-slate-100 hover:border-blue-200 transition-all">
+                             <div className="flex items-center gap-4">
+                                <div className={`w-12 h-12 bg-${item.color}-100 text-${item.color}-600 rounded-xl flex items-center justify-center font-black`}>
+                                   {item.name.charAt(0)}
+                                </div>
+                                <div>
+                                   <p className="text-sm font-bold text-slate-900">{item.name}</p>
+                                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Início: {item.initial}</p>
+                                </div>
+                             </div>
+                             <div className="text-right">
+                                <p className="text-lg font-black text-slate-900">{item.current}</p>
+                                <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">{item.evolution}</span>
+                             </div>
+                          </div>
+                       ))}
+                    </div>
+                 </div>
+              </div>
+              
+              <div className="p-8 bg-white border-t border-slate-100 flex justify-end">
+                 <button 
+                   onClick={() => setIsFullStatsOpen(false)}
+                   className="px-12 py-5 bg-slate-900 text-white font-black rounded-2xl hover:bg-slate-800 transition-all uppercase tracking-widest text-[10px]"
+                 >
+                   Fechar Relatório
+                 </button>
+              </div>
+           </div>
         </div>
       )}
     </div>

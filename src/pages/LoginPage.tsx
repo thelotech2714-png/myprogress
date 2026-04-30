@@ -19,6 +19,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState('');
 
   const roles = [
     { id: UserRole.ADMIN, label: 'Administrador', icon: Shield, desc: 'Gestão central de instrutores e controle financeiro do sistema.' },
@@ -178,14 +180,58 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-all font-medium"
                 required
               />
-              <input
-                type="password"
-                placeholder="Senha"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-all font-medium"
-                required
-              />
+              <div className="relative">
+                <input
+                  type="password"
+                  placeholder="Senha"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-all font-medium"
+                  required
+                />
+                <div className="mt-2 flex justify-end items-center gap-2">
+                  {resetLoading && <Loader2 className="w-3 h-3 animate-spin text-blue-600" />}
+                  {resetSuccess ? (
+                    <div className="flex flex-col items-end animate-in fade-in zoom-in duration-300">
+                      <span className="text-[10px] font-bold text-emerald-600">
+                        ✓ E-mail enviado!
+                      </span>
+                      <span className="text-[9px] text-slate-500 font-medium">
+                        Verifique também sua caixa de spam.
+                      </span>
+                    </div>
+                  ) : (
+                    <button 
+                      type="button" 
+                      onClick={async () => {
+                        if (!email) {
+                          setError('Por favor, insira o seu e-mail acima para recuperar a senha.');
+                          return;
+                        }
+                        try {
+                          setResetLoading(true);
+                          setError('');
+                          await firebaseService.resetPassword(email);
+                          setResetSuccess('check');
+                          setTimeout(() => setResetSuccess(''), 10000); // Clear after 10s
+                        } catch (err: any) {
+                          console.error("Reset password error:", err);
+                          let msg = 'Erro ao enviar e-mail de recuperação.';
+                          if (err.code === 'auth/user-not-found') msg = 'Nenhum usuário encontrado com este e-mail.';
+                          if (err.code === 'auth/invalid-email') msg = 'E-mail inválido.';
+                          setError(msg);
+                        } finally {
+                          setResetLoading(false);
+                        }
+                      }}
+                      disabled={resetLoading}
+                      className="text-xs font-bold text-blue-600 hover:underline disabled:opacity-50"
+                    >
+                      Esqueci minha senha
+                    </button>
+                    )}
+                </div>
+              </div>
             </div>
 
              {error && (

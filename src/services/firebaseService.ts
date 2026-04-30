@@ -13,6 +13,7 @@ import {
   orderBy,
   limit
 } from 'firebase/firestore';
+import { sendPasswordResetEmail } from 'firebase/auth';
 import { db, auth } from '../lib/firebase';
 
 enum OperationType {
@@ -357,6 +358,38 @@ export const firebaseService = {
       return studentUid;
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `students/${studentUid}`);
+    }
+  },
+
+  async saveStudentWorkout(studentId: string, workout: any) {
+    const path = `workouts/${studentId}`;
+    try {
+      await setDoc(doc(db, 'workouts', studentId), {
+        studentId,
+        workout,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    }
+  },
+
+  async getStudentWorkout(studentId: string) {
+    const path = `workouts/${studentId}`;
+    try {
+      const docSnap = await getDoc(doc(db, 'workouts', studentId));
+      return docSnap.exists() ? docSnap.data()?.workout : null;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, path);
+    }
+  },
+
+  async resetPassword(email: string) {
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch (error) {
+      console.error('Password reset error:', error);
+      throw error;
     }
   }
 };

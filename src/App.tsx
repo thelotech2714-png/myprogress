@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { UserRole, User } from './types/auth';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { DashboardLayout } from './layouts/DashboardLayout';
@@ -33,9 +33,12 @@ import { auth } from './lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { firebaseService } from './services/firebaseService';
 
+import { AnimatePresence } from 'motion/react';
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const location = useLocation();
 
   useEffect(() => {
     // Timeout fallback for loading state
@@ -165,77 +168,81 @@ export default function App() {
   }
 
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Public Routes */}
-        <Route 
-          path="/login" 
-          element={user ? <Navigate to={`/${user.role.toLowerCase()}`} replace /> : <LoginPage onLogin={handleLogin} />} 
-        />
-        <Route path="/signup" element={<SignupPage />} />
+    <div className="relative">
+      <AnimatePresence mode="wait">
+        <div key={location.pathname}>
+          <Routes location={location}>
+            {/* Public Routes */}
+            <Route 
+              path="/login" 
+              element={user ? <Navigate to={`/${user.role.toLowerCase()}`} replace /> : <LoginPage onLogin={handleLogin} />} 
+            />
+          <Route path="/signup" element={<SignupPage />} />
 
-        {/* Admin Routes */}
-        <Route
-          path="/admin/*"
-          element={
-            <ProtectedRoute user={user} allowedRoles={[UserRole.ADMIN]}>
-              <DashboardLayout userRole={UserRole.ADMIN}>
-                <Routes>
-                  <Route index element={<AdminDashboard />} />
-                  <Route path="users" element={<UsersPage />} />
-                  <Route path="settings" element={<div className="bg-white p-8 rounded-2xl border border-slate-200">Configurações do Sistema</div>} />
-                </Routes>
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
+          {/* Admin Routes */}
+          <Route
+            path="/admin/*"
+            element={
+              <ProtectedRoute user={user} allowedRoles={[UserRole.ADMIN]}>
+                <DashboardLayout userRole={UserRole.ADMIN}>
+                  <Routes>
+                    <Route index element={<AdminDashboard />} />
+                    <Route path="users" element={<UsersPage />} />
+                    <Route path="settings" element={<div className="bg-white p-8 rounded-2xl border border-slate-200">Configurações do Sistema</div>} />
+                  </Routes>
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
 
-        {/* Instructor Routes */}
-        <Route
-          path="/instructor/*"
-          element={
-            <ProtectedRoute user={user} allowedRoles={[UserRole.INSTRUCTOR]}>
-              <DashboardLayout userRole={UserRole.INSTRUCTOR}>
-                <Routes>
-                  <Route index element={<InstructorDashboard />} />
-                  <Route path="students" element={<StudentManagement />} />
-                </Routes>
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
+          {/* Instructor Routes */}
+          <Route
+            path="/instructor/*"
+            element={
+              <ProtectedRoute user={user} allowedRoles={[UserRole.INSTRUCTOR]}>
+                <DashboardLayout userRole={UserRole.INSTRUCTOR}>
+                  <Routes>
+                    <Route index element={<InstructorDashboard />} />
+                    <Route path="students" element={<StudentManagement />} />
+                  </Routes>
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
 
-        {/* Student Routes */}
-        <Route
-          path="/student/*"
-          element={
-            <ProtectedRoute user={user} allowedRoles={[UserRole.STUDENT]}>
-              <DashboardLayout userRole={UserRole.STUDENT}>
-                <Routes>
-                  <Route index element={<StudentDashboard />} />
-                </Routes>
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
+          {/* Student Routes */}
+          <Route
+            path="/student/*"
+            element={
+              <ProtectedRoute user={user} allowedRoles={[UserRole.STUDENT]}>
+                <DashboardLayout userRole={UserRole.STUDENT}>
+                  <Routes>
+                    <Route index element={<StudentDashboard />} />
+                  </Routes>
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
 
-        {/* Fallback */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="/unauthorized" element={
-          <div className="min-h-screen flex flex-col items-center justify-center p-4">
-            <h1 className="text-4xl font-bold text-red-600">403</h1>
-            <p className="text-slate-600 mt-2 text-center">Desculpe, você não tem permissão para acessar esta página.</p>
-            <button 
-              onClick={() => setUser(null)}
-              className="mt-6 bg-blue-600 text-white px-6 py-2 rounded-lg font-bold"
-            >
-              Voltar ao Início
-            </button>
-          </div>
-        } />
-      </Routes>
-      <ChatAssistant />
-    </BrowserRouter>
-  );
+          {/* Fallback */}
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/unauthorized" element={
+            <div className="min-h-screen flex flex-col items-center justify-center p-4">
+              <h1 className="text-4xl font-bold text-red-600">403</h1>
+              <p className="text-slate-600 mt-2 text-center">Desculpe, você não tem permissão para acessar esta página.</p>
+              <button 
+                onClick={() => setUser(null)}
+                className="mt-6 bg-blue-600 text-white px-6 py-2 rounded-lg font-bold"
+              >
+                Voltar ao Início
+              </button>
+            </div>
+          } />
+        </Routes>
+      </div>
+    </AnimatePresence>
+    <ChatAssistant />
+  </div>
+);
 }
 
