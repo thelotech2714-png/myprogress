@@ -22,12 +22,12 @@ import {
   Bell,
   Headphones
 } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn } from '../utils';
 import { generateInstructorInsights } from '../services/geminiService';
 import { FinancialChart } from '../components/FinancialChart';
 import { RunningActivity } from '../components/RunningActivity';
 import { firebaseService } from '../services/firebaseService';
-import { auth, db } from '../lib/firebase';
+import { auth, db } from '../services/firebase';
 import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
 
 const earningsData = [
@@ -48,7 +48,7 @@ interface Student {
   name: string;
   email: string;
   plan: 'Mensal' | 'Trimestral' | 'Anual';
-  status: 'Ativo' | 'Inativo';
+  status: 'Ativo' | 'Inativo' | 'Bloqueado';
   joinDate: string;
 }
 
@@ -122,7 +122,7 @@ export const InstructorDashboard: React.FC = () => {
             name: doc.data().name || doc.data().email?.split('@')[0] || 'Aluno',
             email: doc.data().email || '',
             plan: doc.data().plan || 'Mensal',
-            status: doc.data().status === 'active' ? 'Ativo' : 'Inativo',
+            status: doc.data().status === 'active' ? 'Ativo' : (doc.data().status === 'blocked' ? 'Bloqueado' : 'Inativo'),
             joinDate: doc.data().createdAt?.toDate?.()?.toISOString()?.split('T')[0] || new Date().toISOString().split('T')[0]
           })) as Student[];
           setRegisteredStudents(students);
@@ -259,11 +259,26 @@ export const InstructorDashboard: React.FC = () => {
     }
   };
 
-  const handleRemoveStudent = (id: string) => {
-    const updated = registeredStudents.filter(s => s.id !== id);
-    setRegisteredStudents(updated);
-    localStorage.setItem('myprogress_students_data', JSON.stringify(updated));
-    localStorage.setItem('myprogress_registered_students', JSON.stringify(updated.map(s => s.email)));
+  const handleRemoveStudent = async (id: string) => {
+    if (!confirm('Tem certeza que deseja remover este aluno?')) return;
+    try {
+      await firebaseService.deleteStudent(id);
+      alert('Matrícula removida com sucesso!');
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao remover aluno.');
+    }
+  };
+
+  const handleToggleStudentStatus = async (student: Student) => {
+    try {
+      const newStatus = student.status === 'Ativo' ? 'blocked' : 'active';
+      await firebaseService.updateStudentStatus(student.id, newStatus);
+      alert(`Aluno ${newStatus === 'active' ? 'desbloqueado' : 'bloqueado'} com sucesso!`);
+    } catch (error) {
+       console.error(error);
+       alert('Erro ao alterar status do aluno.');
+    }
   };
 
   const handleExportStudents = () => {
@@ -337,15 +352,19 @@ export const InstructorDashboard: React.FC = () => {
         A: selectedExercises.map((ex, i) => ({
           id: ex.id,
           name: ex.name,
-          sets: 4,
-          reps: '10-12',
-          load: 'A ajustar',
-          rest: '60s',
+          sets: ex.sets || '4',
+          reps: ex.reps || '10-12',
+          load: ex.load || 'A ajustar',
+          rest: ex.rest || '60s',
           done: false,
           videoUrl: ex.videoUrl || '#'
         })),
-        B: [],
-        C: []
+        B: [
+          { id: 'b1', name: 'Agachamento Livre', sets: 4, reps: '10', load: 'A ajustar', rest: '120s', done: false, videoUrl: '#' },
+        ],
+        C: [
+          { id: 'c1', name: 'Puxada Frontal', sets: 4, reps: '12', load: 'A ajustar', rest: '60s', done: false, videoUrl: '#' },
+        ]
       };
 
       await firebaseService.saveStudentWorkout(student.id, workoutData);
@@ -571,7 +590,7 @@ export const InstructorDashboard: React.FC = () => {
                                     "text-[9px] font-black uppercase tracking-widest",
                                     student.status === 'Ativo' ? "text-emerald-500" : "text-amber-500"
                                   )}>
-                                    {student.status === 'Ativo' ? 'Acesso Liberado' : 'Acesso Bloqueado'}
+                                    {student.status === 'Ativo' ? 'Acesso Liberado' : student.status === 'Bloqueado' ? 'Acesso Bloqueado' : 'Acesso Inativo'}
                                   </span>
                                 </div>
                              </div>
@@ -585,11 +604,7 @@ export const InstructorDashboard: React.FC = () => {
                               <MessageSquare className="w-4 h-4" />
                             </button>
                             <button 
-                              onClick={() => {
-                                const updated = registeredStudents.map(s => s.id === student.id ? { ...s, status: s.status === 'Ativo' ? 'Inativo' : 'Ativo' } : s);
-                                setRegisteredStudents(updated as any);
-                                localStorage.setItem('myprogress_students_data', JSON.stringify(updated));
-                              }}
+                              onClick={() => handleToggleStudentStatus(student)}
                               className={cn(
                                 "flex-1 sm:flex-none px-4 py-2 border text-[10px] font-bold rounded-lg transition-all uppercase tracking-widest",
                                 student.status === 'Ativo' ? "bg-white border-slate-200 text-slate-600 hover:bg-slate-50" : "bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700"
@@ -658,9 +673,73 @@ export const InstructorDashboard: React.FC = () => {
                    {selectedExercises.length > 0 && (
                       <div className="mb-6 p-4 bg-white/5 rounded-2xl border border-white/10 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
                          <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Treino Sugerido:</p>
-                         <div className="flex flex-wrap gap-2">
-                            {selectedExercises.map(ex => (
-                               <span key={ex.id} className="px-3 py-1 bg-white/10 rounded-lg text-[10px] font-bold border border-white/5 uppercase tracking-tight">{ex.name}</span>
+                         <div className="space-y-3">
+                            {selectedExercises.map((ex, idx) => (
+                               <div key={`${ex.id}-${idx}`} className="p-4 bg-white/5 rounded-2xl border border-white/10">
+                                  <div className="flex justify-between items-center mb-3">
+                                     <h5 className="text-sm font-bold text-white">{ex.name}</h5>
+                                     <button 
+                                       onClick={() => setSelectedExercises(prev => prev.filter((_, i) => i !== idx))}
+                                       className="text-red-400 hover:text-red-300"
+                                     >
+                                        <X className="w-3 h-3" />
+                                     </button>
+                                  </div>
+                                  <div className="grid grid-cols-4 gap-2">
+                                     <div className="space-y-1">
+                                        <label className="text-[8px] font-bold text-slate-400 uppercase">Séries</label>
+                                        <input 
+                                          type="text" 
+                                          className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white" 
+                                          value={ex.sets || '4'} 
+                                          onChange={(e) => {
+                                             const up = [...selectedExercises];
+                                             up[idx] = { ...up[idx], sets: e.target.value };
+                                             setSelectedExercises(up);
+                                          }}
+                                        />
+                                     </div>
+                                     <div className="space-y-1">
+                                        <label className="text-[8px] font-bold text-slate-400 uppercase">Reps</label>
+                                        <input 
+                                          type="text" 
+                                          className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white" 
+                                          value={ex.reps || '10-12'} 
+                                          onChange={(e) => {
+                                             const up = [...selectedExercises];
+                                             up[idx] = { ...up[idx], reps: e.target.value };
+                                             setSelectedExercises(up);
+                                          }}
+                                        />
+                                     </div>
+                                     <div className="space-y-1">
+                                        <label className="text-[8px] font-bold text-slate-400 uppercase">Carga</label>
+                                        <input 
+                                          type="text" 
+                                          className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white" 
+                                          value={ex.load || 'A ajustar'} 
+                                          onChange={(e) => {
+                                             const up = [...selectedExercises];
+                                             up[idx] = { ...up[idx], load: e.target.value };
+                                             setSelectedExercises(up);
+                                          }}
+                                        />
+                                     </div>
+                                     <div className="space-y-1">
+                                        <label className="text-[8px] font-bold text-slate-400 uppercase">Descanso</label>
+                                        <input 
+                                          type="text" 
+                                          className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-[10px] text-white" 
+                                          value={ex.rest || '60s'} 
+                                          onChange={(e) => {
+                                             const up = [...selectedExercises];
+                                             up[idx] = { ...up[idx], rest: e.target.value };
+                                             setSelectedExercises(up);
+                                          }}
+                                        />
+                                     </div>
+                                  </div>
+                               </div>
                             ))}
                          </div>
                          <button 

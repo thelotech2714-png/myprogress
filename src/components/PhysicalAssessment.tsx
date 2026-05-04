@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Ruler, Activity, Users, FileText, Clipboard, TrendingDown, Target } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn } from '../utils';
 
 export const PhysicalAssessment: React.FC = () => {
   const [metrics, setMetrics] = useState({

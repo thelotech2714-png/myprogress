@@ -24,8 +24,8 @@ import {
   MessageSquare,
   Users
 } from 'lucide-react';
-import { cn } from '../lib/utils';
-import { generateStudentTips } from '../services/geminiService';
+import { cn } from '../utils';
+import { xpUseCase } from '../domain/useCases/xpUseCase';
 import { firebaseService } from '../services/firebaseService';
 
 import { RunningActivity } from '../components/RunningActivity';
@@ -38,8 +38,9 @@ import { PoseDetectionCamera } from '../components/PoseDetectionCamera';
 import { WaterTracker } from '../components/WaterTracker';
 import { HomeWorkout } from '../components/HomeWorkout';
 
-import { auth, db } from '../lib/firebase';
-import { onSnapshot, collection, query, where, orderBy, limit } from 'firebase/firestore';
+import { auth, db } from '../services/firebase';
+import { onSnapshot, collection, query, where, orderBy, limit, doc } from 'firebase/firestore';
+import { useAuthStore, useProfileStore } from '../store/useStore';
 import { 
   BarChart, 
   Bar, 
@@ -55,31 +56,27 @@ import {
 } from 'recharts';
 
 export const StudentDashboard: React.FC = () => {
+  const { user } = useAuthStore();
+  const { profile, setProfile } = useProfileStore();
   const [aiTip, setAiTip] = useState("Carregando sua dica personalizada...");
   const [isGenerating, setIsGenerating] = useState(false);
   const [messages, setMessages] = useState<any[]>([]);
 
+  const levelInfo = xpUseCase.calculateLevel(profile?.points || 0);
+
   const stats = [
-    { label: 'Média Geral', value: '8.5', icon: TrendingUp, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { label: 'Km este mês', value: '124', icon: Zap, color: 'text-orange-600', bg: 'bg-orange-50' },
-    { label: 'Projetos Entregues', value: '12', icon: Settings, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { label: 'Faltas', value: '2', icon: AlertCircle, color: 'text-amber-600', bg: 'bg-amber-50' },
+    { label: 'Pontos Totais', value: profile?.points?.toLocaleString() || '0', icon: TrendingUp, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { label: 'Treinos Realizados', value: '12', icon: Zap, color: 'text-orange-600', bg: 'bg-orange-50' },
+    { label: 'Level Atual', value: levelInfo.level.toString(), icon: Award, color: 'text-amber-600', bg: 'bg-amber-50' },
+    { label: 'XP para Próximo', value: (levelInfo.xpForNext - levelInfo.xpInLevel).toLocaleString(), icon: Sparkles, color: 'text-indigo-600', bg: 'bg-indigo-50' },
   ];
 
   const fetchAiTip = async () => {
+    if (!profile) return;
     setIsGenerating(true);
     setAiTip("Nossa IA está analisando seu desempenho para criar uma orientação exclusiva...");
     try {
-      const tip = await generateStudentTips({
-        academic: {
-          average: 8.5,
-          projects: 12
-        },
-        fitness: {
-          kmThisMonth: 124,
-          lastRun: "10.4km"
-        }
-      });
+      const tip = await wellnessUseCase.getPersonalizedTip(profile);
       setAiTip(tip);
     } catch (error) {
       console.error(error);
@@ -137,10 +134,17 @@ export const StudentDashboard: React.FC = () => {
     fetchAiTip();
     fetchProgressPhotos();
     
-    if (auth.currentUser) {
+    if (user) {
+      // Real-time listener for profile (points, etc)
+      const unsubProfile = onSnapshot(doc(db, 'users', user.uid), (doc) => {
+        if (doc.exists()) {
+          setProfile(doc.data());
+        }
+      });
+
       const q = query(
         collection(db, 'messages'), 
-        where('toId', '==', auth.currentUser.uid),
+        where('toId', '==', user.uid),
         orderBy('createdAt', 'desc'),
         limit(5)
       );
@@ -149,39 +153,73 @@ export const StudentDashboard: React.FC = () => {
       }, (error) => {
         console.error("Error fetching messages:", error);
       });
-      return () => unsubscribe();
+      return () => {
+        unsubscribe();
+        unsubProfile();
+      };
     }
-  }, []);
+  }, [user]);
+
+  const handleProfilePhotoUpdate = async () => {
+    try {
+      const info = await Device.getInfo();
+      if (info.platform === 'web') {
+        document.getElementById('profile-photo-input')?.click();
+        return;
+      }
+
+      const image = await Camera.getPhoto({
+        quality: 90,
+        allowEditing: true,
+        resultType: 'base64',
+        width: 500,
+        height: 500
+      });
+
+      if (image.base64String && user) {
+        const photoBase64 = `data:image/${image.format};base64,${image.base64String}`;
+        await firebaseService.updateUserProfile(user.uid, { photoURL: photoBase64 });
+      }
+    } catch (err) {
+      console.error('Error taking photo:', err);
+    }
+  };
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex items-center gap-4">
           <div className="relative group">
-            <div className="w-16 h-16 bg-slate-200 rounded-2xl overflow-hidden border-2 border-white shadow-lg">
-              {auth.currentUser?.photoURL ? (
-                <img src={auth.currentUser.photoURL} alt="Profile" className="w-full h-full object-cover" />
+            <div 
+              className="w-16 h-16 bg-slate-200 rounded-2xl overflow-hidden border-2 border-white shadow-lg cursor-pointer"
+              onClick={handleProfilePhotoUpdate}
+            >
+              {profile?.photoURL ? (
+                <img src={profile.photoURL} alt="Profile" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-slate-400">
                   <Users className="w-8 h-8" />
                 </div>
               )}
             </div>
-            <label className="absolute -bottom-1 -right-1 p-1.5 bg-blue-600 text-white rounded-lg shadow-lg cursor-pointer hover:bg-blue-700 transition-all">
+            <label 
+              onClick={handleProfilePhotoUpdate}
+              className="absolute -bottom-1 -right-1 p-1.5 bg-blue-600 text-white rounded-lg shadow-lg cursor-pointer hover:bg-blue-700 transition-all"
+            >
               <Camera className="w-3 h-3" />
               <input 
+                id="profile-photo-input"
                 type="file" 
                 className="hidden" 
                 accept="image/*"
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
-                  if (!file || !auth.currentUser) return;
+                  if (!file || !user) return;
                   const reader = new FileReader();
                   reader.onloadend = async () => {
                     const base64 = reader.result as string;
                     if (base64.length > 800000) return alert('Foto muito grande.');
-                    await firebaseService.updateUserProfile(auth.currentUser!.uid, { photoURL: base64 });
-                    window.location.reload(); // Refresh to show new photo easily
+                    await firebaseService.updateUserProfile(user.uid, { photoURL: base64 });
                   };
                   reader.readAsDataURL(file);
                 }}
@@ -189,8 +227,20 @@ export const StudentDashboard: React.FC = () => {
             </label>
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Olá, {auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || 'Atleta'}!</h1>
-            <p className="text-slate-500">Veja seu progresso e materiais de estudo.</p>
+            <h1 className="text-2xl font-bold text-slate-900">Olá, {profile?.name || user?.email?.split('@')[0] || 'Atleta'}!</h1>
+            <div className="flex flex-col gap-2 mt-2">
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-100 uppercase tracking-widest">Lvl {levelInfo.level}</span>
+                <div className="flex-1 w-32 sm:w-48 h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                  <div 
+                    className="h-full bg-gradient-to-r from-amber-400 to-amber-600 transition-all duration-1000" 
+                    style={{ width: `${levelInfo.progress}%` }} 
+                  />
+                </div>
+                <span className="text-[9px] font-bold text-slate-400 tabular-nums uppercase">{levelInfo.xpInLevel.toLocaleString()} / {levelInfo.xpForNext.toLocaleString()} XP</span>
+              </div>
+              <p className="text-slate-500 text-sm">Próximo nível em {(levelInfo.xpForNext - levelInfo.xpInLevel).toLocaleString()} pontos.</p>
+            </div>
           </div>
         </div>
         <div className="flex gap-2">

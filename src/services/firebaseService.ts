@@ -11,10 +11,11 @@ import {
   type Firestore,
   onSnapshot,
   orderBy,
-  limit
+  limit,
+  increment
 } from 'firebase/firestore';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { db, auth } from '../lib/firebase';
+import { db, auth } from './firebase';
 
 enum OperationType {
   CREATE = 'create',
@@ -33,7 +34,7 @@ interface FirestoreErrorInfo {
 }
 
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
+  const errInfo: any = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
       userId: auth.currentUser?.uid,
@@ -41,8 +42,21 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
       emailVerified: auth.currentUser?.emailVerified,
     },
     operationType,
-    path
+    path,
+    timestamp: new Date().toISOString()
   };
+  
+  // Remote logging for production debugging
+  if (auth.currentUser) {
+    import('firebase/firestore').then(({ addDoc, collection, serverTimestamp }) => {
+      addDoc(collection(db, 'system_logs'), {
+        ...errInfo,
+        serverTime: serverTimestamp(),
+        userAgent: navigator.userAgent
+      }).catch(console.error);
+    });
+  }
+
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
@@ -59,6 +73,7 @@ export const firebaseService = {
         ...data,
         role: finalRole,
         uid,
+        points: 0,
         status: data.status || (finalRole === 'admin' ? 'active' : 'pending'),
         createdAt: serverTimestamp(),
       });
@@ -332,26 +347,69 @@ export const firebaseService = {
   },
 
   // --- Student Registration by Instructor ---
+  async getStudentsByInstructor(instructorId: string, callback: (students: any[]) => void) {
+    try {
+      const q = query(
+        collection(db, 'students'),
+        where('instructorId', '==', instructorId),
+        orderBy('createdAt', 'desc')
+      );
+
+      return onSnapshot(q, async (snapshot) => {
+        const studentDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const students = await Promise.all(studentDocs.map(async (s: any) => {
+          const userSnap = await getDoc(doc(db, 'users', s.userId));
+          return {
+            ...s,
+            ...(userSnap.exists() ? userSnap.data() : {})
+          };
+        }));
+        callback(students);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'students');
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'students');
+    }
+  },
+
+  async deleteStudent(studentId: string) {
+    try {
+      await updateDoc(doc(db, 'students', studentId), { status: 'deleted', instructorId: null });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `students/${studentId}`);
+    }
+  },
+
+  async updateStudentStatus(studentId: string, status: 'active' | 'blocked') {
+    try {
+      await updateDoc(doc(db, 'students', studentId), { status });
+      await updateDoc(doc(db, 'users', studentId), { status });
+    } catch (error) {
+       handleFirestoreError(error, OperationType.UPDATE, `students/${studentId}`);
+    }
+  },
+
   async registerStudent(instructorId: string, data: { name: string, email: string, plan: string }) {
     const studentUid = `stu_${Date.now()}`;
     try {
-      // 1. Create a "shadow" user record in users collection
       await setDoc(doc(db, 'users', studentUid), {
         uid: studentUid,
         email: data.email,
         name: data.name,
         role: 'student',
         status: 'active',
+        points: 0,
         createdAt: serverTimestamp()
       });
 
-      // 2. Create record in students collection
       await setDoc(doc(db, 'students', studentUid), {
         userId: studentUid,
         instructorId: instructorId,
         accessReleased: true,
         status: 'active',
         plan: data.plan,
+        points: 0,
         createdAt: serverTimestamp()
       });
 
@@ -374,6 +432,75 @@ export const firebaseService = {
     }
   },
 
+  // --- Leveling & Ranking ---
+  calculateLevel(points: number) {
+    const levels = [
+      { lvl: 1, min: 0 },
+      { lvl: 2, min: 1000 },
+      { lvl: 3, min: 2500 },
+      { lvl: 4, min: 5000 },
+      { lvl: 5, min: 10000 },
+      { lvl: 6, min: 20000 },
+      { lvl: 7, min: 40000 },
+      { lvl: 8, min: 80000 },
+      { lvl: 9, min: 150000 },
+      { lvl: 10, min: 300000 },
+    ];
+    
+    let currentLevel = 1;
+    let nextLevelExp = levels[1].min;
+    
+    for (let i = 0; i < levels.length; i++) {
+       if (points >= levels[i].min) {
+         currentLevel = levels[i].lvl;
+         nextLevelExp = levels[i+1]?.min || levels[i].min * 2;
+       } else {
+         break;
+       }
+    }
+    
+    const progress = ((points - (levels[currentLevel - 1]?.min || 0)) / (nextLevelExp - (levels[currentLevel - 1]?.min || 0))) * 100;
+
+    return {
+      level: currentLevel,
+      points,
+      nextLevelExp,
+      progress: Math.min(Math.max(progress, 0), 100)
+    };
+  },
+
+  async completeWorkoutSession(studentId: string, sessionData: any) {
+    const id = `sess_${Date.now()}`;
+    try {
+      const { writeBatch, doc, serverTimestamp, increment } = await import('firebase/firestore');
+      const batch = writeBatch(db);
+      
+      batch.set(doc(db, 'workout_sessions', id), {
+        id,
+        studentId,
+        ...sessionData,
+        createdAt: serverTimestamp(),
+      });
+      
+      const rewardPoints = sessionData.rewardPoints || 100;
+
+      // Atomic Increments - Matches security rules (only up to 1000 per update)
+      batch.update(doc(db, 'students', studentId), {
+        points: increment(rewardPoints),
+        updatedAt: serverTimestamp()
+      });
+      
+      batch.update(doc(db, 'users', studentId), {
+        points: increment(rewardPoints),
+        updatedAt: serverTimestamp()
+      });
+      
+      await batch.commit();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `workout_sessions/${id}`);
+    }
+  },
+
   async getStudentWorkout(studentId: string) {
     const path = `workouts/${studentId}`;
     try {
@@ -390,6 +517,81 @@ export const firebaseService = {
     } catch (error) {
       console.error('Password reset error:', error);
       throw error;
+    }
+  },
+
+  // --- Plans Management ---
+  async getPlans() {
+    try {
+      const q = query(collection(db, 'plans'), orderBy('price', 'asc'));
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'plans');
+    }
+  },
+
+  async savePlan(plan: any) {
+    const id = plan.id || `plan_${Date.now()}`;
+    try {
+      await setDoc(doc(db, 'plans', id), {
+        ...plan,
+        id,
+        updatedAt: serverTimestamp(),
+        createdAt: plan.createdAt || serverTimestamp()
+      }, { merge: true });
+      return id;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `plans/${id}`);
+    }
+  },
+
+  async deletePlan(id: string) {
+    try {
+      // Actually we prefer soft-delete by deactivating
+      await updateDoc(doc(db, 'plans', id), { active: false });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `plans/${id}`);
+    }
+  },
+
+  async seedInitialPlans() {
+    try {
+      const existing = await this.getPlans();
+      if (existing && existing.length > 0) return;
+
+      const initialPlans = [
+        {
+          id: 'basic',
+          name: 'Plano Básico',
+          price: 0,
+          currency: 'BRL',
+          features: ['Acesso limitado', 'Até 5 alunos', 'Suporte básico'],
+          active: true
+        },
+        {
+          id: 'pro',
+          name: 'Plano Pro',
+          price: 29.90,
+          currency: 'BRL',
+          features: ['Alunos ilimitados', 'Acesso à IA', 'Relatórios avançados', 'Suporte prioritário'],
+          active: true
+        },
+        {
+          id: 'premium',
+          name: 'Plano Premium',
+          price: 59.90,
+          currency: 'BRL',
+          features: ['Tudo do Pro', 'IA Generativa Avançada', 'Customização de marca', 'Consultoria'],
+          active: true
+        }
+      ];
+
+      for (const plan of initialPlans) {
+        await this.savePlan(plan);
+      }
+    } catch (error) {
+      console.error('Error seeding plans:', error);
     }
   }
 };

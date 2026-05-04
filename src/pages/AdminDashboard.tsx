@@ -16,11 +16,11 @@ import {
   MessageSquare,
   Send
 } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn } from '../utils';
 import { FinancialChart } from '../components/FinancialChart';
 import { FinancialManagement } from '../components/FinancialManagement';
 import { firebaseService } from '../services/firebaseService';
-import { db, auth } from '../lib/firebase';
+import { db, auth } from '../services/firebase';
 import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
 
 interface PendingApproval {
@@ -72,6 +72,7 @@ export const AdminDashboard: React.FC = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [supportMessages, setSupportMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+  const [plans, setPlans] = useState<any[]>([]);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showAddInstructor, setShowAddInstructor] = useState(false);
   const [tempPassword, setTempPassword] = useState<string | null>(null);
@@ -86,8 +87,12 @@ export const AdminDashboard: React.FC = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const insData = await firebaseService.getInstructors();
+      const [insData, plansData] = await Promise.all([
+        firebaseService.getInstructors(),
+        firebaseService.getPlans()
+      ]);
       setInstructors(insData as any || []);
+      setPlans(plansData?.filter((p: any) => p.active) || []);
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
@@ -350,9 +355,17 @@ export const AdminDashboard: React.FC = () => {
                       onChange={(e) => setNewInstructor({...newInstructor, plan: e.target.value})}
                       className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold"
                     >
-                      <option value="Basic">Basic</option>
-                      <option value="Premium">Premium</option>
-                      <option value="Enterprise">Enterprise</option>
+                      {plans.length > 0 ? (
+                        plans.map(p => (
+                          <option key={p.id} value={p.name}>{p.name}</option>
+                        ))
+                      ) : (
+                        <>
+                          <option value="Basic">Basic</option>
+                          <option value="Premium">Premium</option>
+                          <option value="Enterprise">Enterprise</option>
+                        </>
+                      )}
                     </select>
                   </div>
                   <div className="lg:col-span-4 flex justify-end gap-3 mt-2">
@@ -693,16 +706,24 @@ export const AdminDashboard: React.FC = () => {
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-sm"
                   />
                </div>
-               <div className="space-y-2">
+                <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Plano</label>
                   <select 
                     value={editingInstructor.plan}
                     onChange={(e) => setEditingInstructor({...editingInstructor, plan: e.target.value})}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-sm"
                   >
-                    <option value="Basic">Basic</option>
-                    <option value="Premium">Premium</option>
-                    <option value="Enterprise">Enterprise</option>
+                    {plans.length > 0 ? (
+                      plans.map(p => (
+                        <option key={p.id} value={p.name}>{p.name}</option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="Basic">Basic</option>
+                        <option value="Premium">Premium</option>
+                        <option value="Enterprise">Enterprise</option>
+                      </>
+                    )}
                   </select>
                </div>
                <button 

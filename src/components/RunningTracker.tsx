@@ -3,7 +3,10 @@ import { Play, Square, MapPin, Navigation, Info, Zap, Clock, TrendingUp, AlertCi
 import { MapContainer, TileLayer, Polyline, useMap, Marker } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { cn } from '../lib/utils';
+import { cn } from '../utils';
+
+import { Geolocation } from '@capacitor/geolocation';
+import { permissionService } from '../services/permissionService';
 
 // Fix for default marker icons in Leaflet with React
 // @ts-ignore
@@ -34,30 +37,33 @@ export const RunningTracker: React.FC = () => {
   const [pace, setPace] = useState(0);
   const [locationError, setLocationError] = useState<string | null>(null);
   
-  const watchId = useRef<number | null>(null);
+  const watchId = useRef<string | null>(null);
   const timerId = useRef<number | null>(null);
 
   // Request high accuracy location
   useEffect(() => {
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setCurrentLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-          setLocationError(null);
-        },
-        (err) => {
-          console.error("Erro ao obter localização inicial:", err);
-          if (err.code === err.PERMISSION_DENIED) {
-            setLocationError("Permissão de localização negada. Por favor, habilite o GPS nas configurações do seu navegador para usar o rastreamento.");
-          } else {
-            setLocationError("Não foi possível encontrar sua localização. Verifique seu sinal de GPS.");
-          }
-        },
-        { enableHighAccuracy: true }
-      );
-    } else {
-      setLocationError("Seu navegador não suporta geolocalização.");
-    }
+    const initGPS = async () => {
+      try {
+        const granted = await permissionService.requestGeolocation();
+        if (!granted) {
+          setLocationError("Permissão de localização negada. Habilite o GPS nas configurações.");
+          return;
+        }
+
+        const pos = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: 10000
+        });
+        
+        setCurrentLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocationError(null);
+      } catch (err: any) {
+        console.error("Erro ao obter localização inicial:", err);
+        setLocationError("Não foi possível encontrar sua localização. Verifique seu sinal de GPS.");
+      }
+    };
+
+    initGPS();
   }, []);
 
   const calculateDistance = (loc1: Location, loc2: Location) => {
@@ -72,7 +78,13 @@ export const RunningTracker: React.FC = () => {
     return R * c; // Distance in km
   };
 
-  const startTracking = () => {
+  const startTracking = async () => {
+    const granted = await permissionService.requestGeolocation();
+    if (!granted) {
+      alert("A permissão de GPS é necessária para rastrear sua corrida.");
+      return;
+    }
+
     setIsActive(true);
     setPath([]);
     setDistance(0);
@@ -84,9 +96,11 @@ export const RunningTracker: React.FC = () => {
     }, 1000);
 
     // Start GPS Tracking
-    if ("geolocation" in navigator) {
-      watchId.current = navigator.geolocation.watchPosition(
+    try {
+      watchId.current = await Geolocation.watchPosition(
+        { enableHighAccuracy: true, timeout: 5000 },
         (pos) => {
+          if (!pos) return;
           const newLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           setCurrentLocation(newLoc);
           
@@ -102,17 +116,17 @@ export const RunningTracker: React.FC = () => {
             }
             return [newLoc];
           });
-        },
-        (err) => console.error("Erro no rastreamento:", err),
-        { enableHighAccuracy: true }
+        }
       );
+    } catch (err) {
+      console.error("Error watching position:", err);
     }
   };
 
   const stopTracking = () => {
     setIsActive(false);
     if (watchId.current !== null) {
-      navigator.geolocation.clearWatch(watchId.current);
+      Geolocation.clearWatch({ id: watchId.current });
       watchId.current = null;
     }
     if (timerId.current !== null) {

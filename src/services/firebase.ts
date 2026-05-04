@@ -7,4 +7,13 @@ import firebaseConfig from '../../firebase-applet-config.json';
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-export const messaging = getMessaging(app);
+
+// Optional: Messaging
+let messaging = null;
+try {
+  messaging = getMessaging(app);
+} catch (e) {
+  console.warn('Firebase Messaging not supported in this environment');
+}
+
+export { messaging };

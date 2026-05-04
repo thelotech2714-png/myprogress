@@ -14,8 +14,10 @@ import {
   ChevronLeft,
   Info
 } from 'lucide-react';
-import { cn } from '../lib/utils';
-import { motion, AnimatePresence } from 'motion/react';
+import { cn } from '../utils';
+import { motion, AnimatePresence } from 'framer-motion';
+import { workoutUseCase } from '../domain/useCases/workoutUseCase';
+import { useAuthStore } from '../store/useStore';
 
 interface Exercise {
   id: string;
@@ -541,7 +543,17 @@ export const HomeWorkout: React.FC = () => {
     setIsPaused(true);
     
     if (completedExercises.length + 1 === filteredExercises.length) {
-      setIsFinished(true);
+      const { user } = useAuthStore.getState();
+      if (user) {
+        workoutUseCase.completeSession(user.uid, {
+          exercisesCount: filteredExercises.length,
+          durationMinutes: 15 // This could be calculated from start/end times
+        }).then(() => {
+          setIsFinished(true);
+        }).catch(console.error);
+      } else {
+        setIsFinished(true);
+      }
     } else {
       setTimeout(() => {
         if (!isFinished) nextExercise();

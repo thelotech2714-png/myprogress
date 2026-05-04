@@ -1,5 +1,5 @@
 import { getToken, onMessage } from 'firebase/messaging';
-import { messaging, db, auth } from '../lib/firebase';
+import { messaging, db, auth } from './firebase';
 import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
 
 export const notificationService = {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Send, X, User, Sparkles, Loader2, Bot } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn } from '../utils';
 
 export const ChatAssistant: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);

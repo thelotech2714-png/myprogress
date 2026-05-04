@@ -1,6 +1,6 @@
 import React from 'react';
 import { CreditCard, DollarSign, ArrowUpRight, ArrowDownRight, Clock, CheckCircle2, AlertCircle, Wallet, QrCode } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn } from '../utils';
 
 export const FinancialManagement: React.FC = () => {
   return (

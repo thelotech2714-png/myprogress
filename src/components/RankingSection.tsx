@@ -1,6 +1,10 @@
-import React from 'react';
-import { Award, Trophy, Medal, Crown, TrendingUp, ArrowUp } from 'lucide-react';
-import { cn } from '../lib/utils';
+import React, { useState, useEffect } from 'react';
+import { Award, Trophy, Medal, Crown, TrendingUp, ArrowUp, Loader2 } from 'lucide-react';
+import { cn } from '../utils';
+import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { db, auth } from '../services/firebase';
+
+import { useAuthStore } from '../store/useStore';
 
 interface RankUser {
   id: string;
@@ -10,15 +14,41 @@ interface RankUser {
   isMe?: boolean;
 }
 
-const rankingData: RankUser[] = [
-  { id: '1', name: 'Ricardo Santos', points: 12450, rank: 1 },
-  { id: '2', name: 'Juliana Lima', points: 11200, rank: 2 },
-  { id: '3', name: 'Bruno Alves', points: 10800, rank: 3 },
-  { id: '4', name: 'Usuário Demo', points: 9500, rank: 4, isMe: true },
-  { id: '5', name: 'Carla Pereira', points: 8900, rank: 5 },
-];
-
 export const RankingSection: React.FC = () => {
+  const { user } = useAuthStore();
+  const [rankingData, setRankingData] = useState<RankUser[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchRanking = async () => {
+      try {
+        const q = query(collection(db, 'students'), orderBy('points', 'desc'), limit(10));
+        const snapshot = await getDocs(q);
+        const data = snapshot.docs.map((doc, index) => ({
+          id: doc.id,
+          name: doc.data().name || 'Atleta',
+          points: doc.data().points || 0,
+          rank: index + 1,
+          isMe: doc.id === user?.uid
+        }));
+        setRankingData(data);
+      } catch (err) {
+        console.error("Error fetching ranking:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchRanking();
+  }, [user]);
+
+  if (loading) {
+    return (
+      <div className="card-standard p-12 bg-white flex flex-col items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-4" />
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Carregando Ranking...</p>
+      </div>
+    );
+  }
   return (
     <div className="card-standard p-8 bg-white">
       <div className="flex items-center justify-between mb-8">

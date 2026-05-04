@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CheckCircle2, ChevronRight, Play, Dumbbell, Clock, Zap, Target, ChevronDown, ChevronUp, X, Timer, ArrowRight, ArrowLeft, Loader2 } from 'lucide-react';
-import { cn } from '../lib/utils';
-import { auth } from '../lib/firebase';
+import { cn } from '../utils';
+import { auth } from '../services/firebase';
 import { firebaseService } from '../services/firebaseService';
 
 interface Exercise {
   id: string;
   name: string;
-  sets: number;
+  sets: string | number;
   reps: string;
   load: string;
   rest: string;
@@ -73,27 +73,63 @@ export const StudentWorkout: React.FC = () => {
   const [currentExIndex, setCurrentExIndex] = useState(0);
   const [restTimer, setRestTimer] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [totalTime, setTotalTime] = useState(0);
+  const [exerciseTimer, setExerciseTimer] = useState(0);
+  const [isExerciseActive, setIsExerciseActive] = useState(false);
   const timerInterval = useRef<NodeJS.Timeout | null>(null);
+  const workoutTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const exerciseTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Rest Timer Effect
   useEffect(() => {
+    let interval: NodeJS.Timeout;
     if (isTimerRunning && restTimer > 0) {
-      timerInterval.current = setInterval(() => {
+      interval = setInterval(() => {
         setRestTimer(prev => {
           if (prev <= 1) {
-             clearInterval(timerInterval.current!);
-             setIsTimerRunning(false);
-             return 0;
+            setIsTimerRunning(false);
+            return 0;
           }
           return prev - 1;
         });
       }, 1000);
-    } else {
-      if (timerInterval.current) clearInterval(timerInterval.current);
+    } else if (restTimer === 0) {
+      setIsTimerRunning(false);
     }
-    return () => { if (timerInterval.current) clearInterval(timerInterval.current); };
-  }, [isTimerRunning, restTimer]);
+    return () => clearInterval(interval);
+  }, [isTimerRunning, restTimer > 0]);
 
-  const exercises = allWorkouts[activeWorkout];
+  // Total Workout Timer Effect
+  useEffect(() => {
+    if (isExecutionMode && !isFinished) {
+      workoutTimerRef.current = setInterval(() => {
+        setTotalTime(prev => prev + 1);
+      }, 1000);
+    } else {
+      if (workoutTimerRef.current) clearInterval(workoutTimerRef.current);
+    }
+    return () => { if (workoutTimerRef.current) clearInterval(workoutTimerRef.current); };
+  }, [isExecutionMode, isFinished]);
+
+  // Exercise Timer Effect
+  useEffect(() => {
+    if (isExerciseActive && !isFinished) {
+      exerciseTimerRef.current = setInterval(() => {
+        setExerciseTimer(prev => prev + 1);
+      }, 1000);
+    } else {
+      if (exerciseTimerRef.current) clearInterval(exerciseTimerRef.current);
+    }
+    return () => { if (exerciseTimerRef.current) clearInterval(exerciseTimerRef.current); };
+  }, [isExerciseActive, isFinished]);
+
+  const formatWorkoutTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const exercises = allWorkouts[activeWorkout] || [];
 
   const startRest = (seconds: string) => {
     const sec = parseInt(seconds.replace('s', '')) || 60;
@@ -112,16 +148,34 @@ export const StudentWorkout: React.FC = () => {
 
   const progress = (exercises.filter(ex => ex.done).length / exercises.length) * 100;
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
     if (progress < 100) {
       if (!confirm('Você ainda não completou todos os exercícios. Deseja finalizar mesmo assim?')) return;
     }
+    
     setIsFinished(true);
+
+    if (auth.currentUser) {
+      try {
+         await firebaseService.saveWorkoutSession(auth.currentUser.uid, {
+            workoutId: activeWorkout,
+            duration: totalTime,
+            exercisesCount: exercises.length,
+            date: new Date()
+         });
+      } catch (err) {
+         console.error("Erro ao salvar sessão:", err);
+      }
+    }
   };
 
   const startExecution = () => {
+    setIsFinished(false);
     setIsExecutionMode(true);
     setCurrentExIndex(0);
+    setTotalTime(0);
+    setExerciseTimer(0);
+    setIsExerciseActive(false);
   };
 
   if (loading) {
@@ -144,7 +198,7 @@ export const StudentWorkout: React.FC = () => {
         <div className="grid grid-cols-2 gap-4 w-full max-w-xs mb-8">
            <div className="p-4 bg-slate-50 rounded-2xl">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Duração</p>
-              <p className="text-lg font-black text-slate-900">54min</p>
+              <p className="text-lg font-black text-slate-900">{formatWorkoutTime(totalTime)}</p>
            </div>
            <div className="p-4 bg-slate-50 rounded-2xl">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Volume</p>
@@ -249,10 +303,11 @@ export const StudentWorkout: React.FC = () => {
       <div className="mt-8 pt-8 border-t border-slate-100 flex flex-col md:flex-row gap-4">
          <button 
            onClick={startExecution}
-           className="flex-1 py-4 bg-slate-900 text-white font-black text-sm uppercase tracking-widest rounded-xl hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/10 flex items-center justify-center gap-3"
+           disabled={exercises.length === 0}
+           className="flex-1 py-4 bg-slate-900 text-white font-black text-sm uppercase tracking-widest rounded-xl hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/10 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
          >
             <Play className="w-5 h-5 fill-current" />
-            Iniciar Treino
+            {exercises.length === 0 ? 'Sem exercícios' : 'Iniciar Treino'}
          </button>
          <button 
            onClick={handleFinish}
@@ -265,26 +320,34 @@ export const StudentWorkout: React.FC = () => {
       {/* Execution Mode Fullscreenish Overlay */}
       {isExecutionMode && (
         <div className="fixed inset-0 bg-white z-[7000] flex flex-col animate-in slide-in-from-bottom-full duration-500">
-           <div className="p-6 md:p-8 bg-slate-900 text-white flex justify-between items-center shrink-0">
+           <div className="p-6 md:p-8 bg-slate-900 text-white flex justify-between items-center shrink-0 border-b border-white/5">
               <div className="flex items-center gap-4">
-                 <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center">
+                 <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20">
                     <Dumbbell className="w-6 h-6 text-white" />
                  </div>
                  <div>
                     <h3 className="text-xl font-black uppercase italic tracking-tight">Treino {activeWorkout} em Execução</h3>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Foco e Intensidade Máxima</p>
+                    <div className="flex items-center gap-3">
+                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Foco e Intensidade Máxima</p>
+                       <div className="flex items-center gap-2 bg-blue-500 px-3 py-1 rounded-lg border border-blue-400/50">
+                          <Clock className="w-3.5 h-3.5 text-white animate-pulse" />
+                          <p className="text-sm font-black text-white tabular-nums leading-none">{formatWorkoutTime(totalTime)}</p>
+                       </div>
+                    </div>
                  </div>
               </div>
               <button 
-                onClick={() => {
-                  if (confirm('Deseja sair do modo de execução? Seu progresso será mantido.')) {
-                    setIsExecutionMode(false);
-                    setIsTimerRunning(false);
-                  }
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsExecutionMode(false);
+                  setIsTimerRunning(false);
+                  setIsExerciseActive(false);
+                  setRestTimer(0);
                 }} 
-                className="p-3 bg-white/10 hover:bg-white/20 rounded-2xl transition-all"
+                className="p-4 bg-white/10 hover:bg-red-500 text-white rounded-2xl transition-all group relative z-[7001]"
+                title="Sair do Treino"
               >
-                 <X className="w-6 h-6" />
+                 <X className="w-6 h-6 group-hover:scale-110 transition-transform pointer-events-none" />
               </button>
            </div>
 
@@ -308,52 +371,96 @@ export const StudentWorkout: React.FC = () => {
                           <div className="relative">
                              <div className="absolute inset-0 bg-blue-600 rounded-full blur-2xl opacity-10 animate-pulse" />
                              <h4 className="text-3xl md:text-5xl font-black text-slate-900 uppercase italic tracking-tight relative break-words">
-                                {exercises[currentExIndex].name}
+                                {exercises.length > 0 ? exercises[currentExIndex]?.name : 'Carregando Exercício...'}
                              </h4>
                           </div>
                        </div>
 
-                       <div className="grid grid-cols-3 gap-4 mb-12">
+                       <div className="grid grid-cols-3 gap-4 mb-8">
                           <div className="p-4 bg-white rounded-3xl border border-slate-100">
                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Séries</p>
-                             <p className="text-2xl font-black text-slate-900">{exercises[currentExIndex].sets}</p>
+                             <p className="text-2xl font-black text-slate-900">{exercises[currentExIndex]?.sets || '-'}</p>
                           </div>
                           <div className="p-4 bg-white rounded-3xl border border-slate-100">
                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Reps</p>
-                             <p className="text-2xl font-black text-slate-900">{exercises[currentExIndex].reps}</p>
+                             <p className="text-2xl font-black text-slate-900">{exercises[currentExIndex]?.reps || '-'}</p>
                           </div>
                           <div className="p-4 bg-white rounded-3xl border border-slate-100">
                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Carga</p>
-                             <p className="text-2xl font-black text-blue-600">{exercises[currentExIndex].load}</p>
+                             <p className="text-2xl font-black text-blue-600">{exercises[currentExIndex]?.load || '-'}</p>
                           </div>
                        </div>
 
+                       {/* Exercise Activity Timer */}
+                       {isExerciseActive && (
+                        <div className="mb-8 p-6 bg-blue-50 rounded-3xl border-2 border-blue-200 animate-in zoom-in duration-300">
+                           <div className="flex items-center justify-center gap-4">
+                              <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center">
+                                 <Play className="w-6 h-6 text-white fill-white animate-pulse" />
+                              </div>
+                              <div className="text-left">
+                                 <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest leading-none mb-1">Tempo de Execução</p>
+                                 <p className="text-4xl font-black text-slate-900 tabular-nums leading-none">{exerciseTimer}s</p>
+                              </div>
+                           </div>
+                        </div>
+                       )}
+
                        <div className="flex flex-col md:flex-row gap-4">
                           <button 
-                            onClick={() => startRest(exercises[currentExIndex].rest)}
-                            className="flex-1 py-6 bg-slate-900 text-white rounded-[2rem] font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/10"
+                            onClick={() => {
+                              if (!isExerciseActive) {
+                                setExerciseTimer(0);
+                                setIsExerciseActive(true);
+                                setIsTimerRunning(false);
+                                setRestTimer(0);
+                              } else {
+                                setIsExerciseActive(false);
+                              }
+                            }}
+                            className={cn(
+                              "flex-1 py-6 rounded-[2rem] font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 transition-all shadow-xl",
+                              isExerciseActive ? "bg-blue-600 text-white shadow-blue-600/20" : "bg-white text-blue-600 border-2 border-blue-600 shadow-blue-600/5 hover:bg-blue-50"
+                            )}
                           >
-                             <Timer className={cn("w-5 h-5", isTimerRunning && "animate-spin")} />
-                             Descansar ({exercises[currentExIndex].rest})
+                             <Play className={cn("w-5 h-5", isExerciseActive ? "fill-white" : "fill-current")} />
+                             {isExerciseActive ? "Finalizar Série" : "Iniciar Série"}
                           </button>
+
                           <button 
                             onClick={() => {
-                               toggleDone(exercises[currentExIndex].id);
-                               if (currentExIndex < exercises.length - 1) {
-                                  setCurrentExIndex(prev => prev + 1);
-                                  setIsTimerRunning(false);
-                                  setRestTimer(0);
-                               } else {
-                                  setIsExecutionMode(false);
-                                  setIsFinished(true);
-                               }
+                               startRest(exercises[currentExIndex]?.rest || '60s');
+                               setIsExerciseActive(false);
                             }}
-                            className="flex-1 py-6 bg-blue-600 text-white rounded-[2rem] font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20"
+                            className={cn(
+                              "flex-1 py-6 rounded-[2rem] font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 transition-all shadow-xl",
+                              isTimerRunning ? "bg-amber-500 text-white shadow-amber-500/20" : "bg-slate-900 text-white shadow-slate-900/10 hover:bg-slate-800"
+                            )}
                           >
-                             <CheckCircle2 className="w-5 h-5" />
-                             Concluir Exercício
+                             <Timer className={cn("w-5 h-5", isTimerRunning && "animate-spin")} />
+                             {isTimerRunning ? `Descansando (${restTimer}s)` : `Marcar Descanso`}
                           </button>
                        </div>
+
+                       <button 
+                          onClick={() => {
+                             if (exercises[currentExIndex]) toggleDone(exercises[currentExIndex].id);
+                             setIsExerciseActive(false);
+                             setIsTimerRunning(false);
+                             setRestTimer(0);
+                             if (currentExIndex < exercises.length - 1) {
+                                setCurrentExIndex(prev => prev + 1);
+                                setExerciseTimer(0);
+                             } else {
+                                setIsExecutionMode(false);
+                                setIsFinished(true);
+                             }
+                          }}
+                          className="w-full mt-4 py-6 bg-slate-100 text-slate-800 rounded-[2rem] font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 hover:bg-emerald-500 hover:text-white transition-all shadow-lg"
+                       >
+                          <CheckCircle2 className="w-5 h-5" />
+                          Próximo Exercício
+                       </button>
                     </div>
 
                     {/* Rest Timer Overlay (If active) */}
@@ -382,16 +489,37 @@ export const StudentWorkout: React.FC = () => {
                           <ArrowLeft className="w-4 h-4" /> Anterior
                        </button>
 
-                       <div className="flex gap-2">
+                       <div className="flex gap-4">
                           <button 
                             onClick={() => {
                               const url = exercises[currentExIndex].videoUrl;
                               if (url && url !== '#') setSelectedVideoUrl(url);
                               else alert('Vídeo não disponível');
                             }}
-                            className="p-4 bg-slate-100 text-slate-600 rounded-2xl hover:bg-slate-200 transition-all"
+                            className="p-4 bg-slate-100 text-slate-600 rounded-2xl hover:bg-slate-200 transition-all flex items-center justify-center gap-2"
+                            title="Ver vídeo"
                           >
-                             <Play className="w-5 h-5 fill-current" />
+                             <Play className="w-4 h-4 fill-current" />
+                             <span className="text-[10px] font-bold uppercase">Ver</span>
+                          </button>
+
+                          <button 
+                            onClick={() => setIsExerciseActive(!isExerciseActive)}
+                            className={cn(
+                              "w-20 h-20 rounded-full flex flex-col items-center justify-center transition-all shadow-2xl relative",
+                              isExerciseActive 
+                                ? "bg-blue-600 text-white shadow-blue-500/30 scale-110" 
+                                : "bg-white text-slate-900 border-2 border-slate-100 shadow-slate-200/50 hover:border-blue-200"
+                            )}
+                          >
+                             {isExerciseActive ? (
+                               <div className="flex flex-col items-center">
+                                  <div className="w-2 h-2 bg-white rounded-full animate-ping mb-1" />
+                                  <span className="text-lg font-black tabular-nums">{exerciseTimer}s</span>
+                               </div>
+                             ) : (
+                               <Play className="w-8 h-8 fill-current ml-1" />
+                             )}
                           </button>
                        </div>
 

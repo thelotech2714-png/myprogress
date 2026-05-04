@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Calendar as CalendarIcon, Clock, Users, ChevronLeft, ChevronRight, Plus, CheckCircle2, UserPlus, Trash2 } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn } from '../utils';
 
 interface TimeSlot {
   id: string;
@@ -60,7 +60,7 @@ export const CalendarManagement: React.FC = () => {
       ...prev,
       [day]: [
         ...(prev[day] || []),
-        { id: Math.random().toString(36).substr(2, 9), time, status: 'available' }
+        { id: Math.random().toString(36).substring(2, 11), time, status: 'available' as 'available' | 'booked' }
       ].sort((a, b) => a.time.localeCompare(b.time))
     }));
   };

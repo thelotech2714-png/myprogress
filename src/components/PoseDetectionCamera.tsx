@@ -4,7 +4,9 @@ import * as tf from '@tensorflow/tfjs-core';
 import '@tensorflow/tfjs-backend-webgl';
 import '@tensorflow/tfjs-converter';
 import { Camera, RefreshCw, AlertCircle, CheckCircle2, Play, Pause } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn } from '../utils';
+
+import { permissionService } from '../services/permissionService';
 
 interface PoseDetectionCameraProps {
   exerciseType?: 'squat' | 'bicep_curl' | 'pushup' | 'jumping_jack';
@@ -33,6 +35,14 @@ export const PoseDetectionCamera: React.FC<PoseDetectionCameraProps> = ({
     if (!videoRef.current) return;
     try {
       setError(null);
+      
+      const granted = await permissionService.requestCamera();
+      if (!granted) {
+        setError("Permissão de câmera negada. Habilite o acesso nas configurações do Android.");
+        setIsActive(false);
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: 640, height: 480 },
         audio: false,

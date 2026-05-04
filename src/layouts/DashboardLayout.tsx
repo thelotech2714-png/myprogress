@@ -12,12 +12,13 @@ import {
   Camera,
   Check,
   Loader2,
-  Trash2
+  Trash2,
+  CreditCard
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '../lib/utils';
+import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '../utils';
 import { UserRole } from '../types/auth';
-import { auth } from '../lib/firebase';
+import { auth } from '../services/firebase';
 import { firebaseService } from '../services/firebaseService';
 import { notificationService } from '../services/notificationService';
 
@@ -30,6 +31,7 @@ const navItems = {
   [UserRole.ADMIN]: [
     { label: 'Visão Geral', icon: LayoutDashboard, href: '/admin' },
     { label: 'Usuários', icon: Users, href: '/admin/users' },
+    { label: 'Planos', icon: CreditCard, href: '/admin/plans' },
     { label: 'Configurações', icon: Settings, href: '/admin/settings' },
   ],
   [UserRole.INSTRUCTOR]: [

@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogIn, Shield, Users, BookOpen, School, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 import { UserRole } from '../types/auth';
-import { motion } from 'motion/react';
-import { cn } from '../lib/utils';
-import { auth } from '../lib/firebase';
+import { motion } from 'framer-motion';
+import { cn } from '../utils';
+import { auth } from '../services/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { firebaseService } from '../services/firebaseService';
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Search, Plus, Play, Info, Dumbbell, Zap, Target, BookOpen, X, ChevronRight } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn } from '../utils';
 
 export interface Exercise {
   id: string;

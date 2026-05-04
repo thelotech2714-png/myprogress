@@ -14,7 +14,7 @@ import {
   ChevronRight,
   MoreHorizontal
 } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn } from '../utils';
 
 interface Student {
   id: string;

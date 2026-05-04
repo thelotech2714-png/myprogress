@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Check, ChevronRight, User, Mail, Lock, Phone, CreditCard, QrCode, Loader2 } from 'lucide-react';
-import { cn } from '../lib/utils';
-import { auth } from '../lib/firebase';
+import { cn } from '../utils';
+import { auth } from '../services/firebase';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { firebaseService } from '../services/firebaseService';
 

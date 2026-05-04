@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Timer, MapPin, Zap, TrendingUp, Calendar, ArrowRight, Share2, Check } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn } from '../utils';
 
 interface ActivityProps {
   distance: string;

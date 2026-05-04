@@ -1,6 +1,6 @@
 {
   "name": "Myprogress",
-  "description": "Sistema completo de gestão educacional com design brutalista e dashboards para administradores, instrutores, alunos e centros.",
-  "requestFramePermissions": ["camera", "geolocation"],
+  "description": "Plataforma premium de gestão fitness para personal trainers e alunos, com IA vision para exercícios, tracking de performance e gestão financeira.",
+  "requestFramePermissions": ["camera", "geolocation", "notifications"],
   "majorCapabilities": []
 }

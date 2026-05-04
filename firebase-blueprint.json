@@ -96,6 +96,21 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["toId", "title", "message", "read"]
+    },
+    "Plan": {
+      "title": "Subscription Plan",
+      "description": "Configurable subscription tiers for instructors",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "price": { "type": "number" },
+        "currency": { "type": "string" },
+        "features": { "type": "array", "items": { "type": "string" } },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "price", "active"]
     }
   },
   "firestore": {
@@ -126,6 +141,18 @@
     "/progress_photos/{photoId}": {
       "schema": "ProgressPhoto",
       "description": "Student progress tracking images"
+    },
+    "/workouts/{studentId}": {
+      "schema": "object",
+      "description": "Student training plan"
+    },
+    "/workout_sessions/{sessionId}": {
+      "schema": "object",
+      "description": "History of completed workout sessions"
+    },
+    "/plans/{planId}": {
+      "schema": "Plan",
+      "description": "Configurable subscription tiers managed by admin"
     }
   }
 }

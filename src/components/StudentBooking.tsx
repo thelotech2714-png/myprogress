@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Calendar as CalendarIcon, Clock, CheckCircle2, ChevronLeft, ChevronRight, Bookmark } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn } from '../utils';
 
 interface AvailableSlot {
   id: string;

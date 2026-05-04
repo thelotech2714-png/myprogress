@@ -13,7 +13,7 @@ import {
   MoreVertical
 } from 'lucide-react';
 import { firebaseService } from '../services/firebaseService';
-import { cn } from '../lib/utils';
+import { cn } from '../utils';
 import { UserRole } from '../types/auth';
 
 interface UserProfile {

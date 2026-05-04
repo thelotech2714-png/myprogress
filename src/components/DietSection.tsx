@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Utensils, Sparkles, Loader2, Save, X, Apple } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn } from '../utils';
 import { optimizeDiet } from '../services/geminiService';
 
 export const DietSection: React.FC = () => {
