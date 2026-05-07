@@ -1,14 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
-
-const getGeminiKey = () => {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) {
-    console.warn("GEMINI_API_KEY is not defined. AI features will be limited.");
-  }
-  return key || "";
-};
-
-const ai = new GoogleGenAI({ apiKey: getGeminiKey() });
+import { callGeminiProxy } from "@/lib/ai-proxy";
 
 export const generateInstructorInsights = async (studentData: any) => {
   const prompt = `
@@ -23,19 +13,8 @@ export const generateInstructorInsights = async (studentData: any) => {
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-      }
-    });
-    
-    if (!response.text) {
-      throw new Error("Empty response from AI");
-    }
-
-    return JSON.parse(response.text.trim());
+    const text = await callGeminiProxy(prompt);
+    return JSON.parse(text.trim());
   } catch (error) {
     console.error("Error generating insights:", error);
     return {
@@ -56,11 +35,8 @@ export const generateStudentTips = async (progressData: any) => {
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: prompt,
-    });
-    return response.text?.trim() || "Mantenha o foco nos treinos e estudos, o resultado vem com a constância!";
+    const text = await callGeminiProxy(prompt);
+    return text.trim() || "Mantenha o foco nos treinos e estudos, o resultado vem com a constância!";
   } catch (error) {
     console.error("Error generating student tip:", error);
     return "Lembre-se: o equilíbrio entre mente e corpo é a chave para o sucesso.";
@@ -80,14 +56,9 @@ export const optimizeDiet = async (currentDiet: string, goals: string) => {
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: prompt,
-    });
-    
-    if (!response.text) return "Tente equilibrar melhor seus macros para sua intensidade de treino.";
-    
-    return response.text.trim();
+    const text = await callGeminiProxy(prompt);
+    if (!text) return "Tente equilibrar melhor seus macros para sua intensidade de treino.";
+    return text.trim();
   } catch (error) {
     console.error("Error optimizing diet:", error);
     return "A IA de nutrição está descansando. Foque em hidratação e proteínas limpas hoje!";

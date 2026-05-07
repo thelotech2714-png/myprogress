@@ -1,94 +1,70 @@
 {
   "entities": {
     "User": {
-      "title": "User Profile",
-      "description": "General user data and role assignment",
+      "title": "User",
+      "description": "Base user profile information.",
       "type": "object",
       "properties": {
         "uid": { "type": "string" },
-        "email": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
         "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["student", "instructor", "admin"] },
+        "status": { "type": "string", "enum": ["active", "pending", "blocked"] },
+        "points": { "type": "number" },
         "photoURL": { "type": "string" },
-        "role": { "type": "string", "enum": ["admin", "instructor", "student"] },
-        "status": { "type": "string", "enum": ["pending", "active", "blocked"] },
-        "fcmTokens": { "type": "array", "items": { "type": "string" } },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["uid", "email", "role", "status"]
-    },
-    "ProgressPhoto": {
-      "title": "Progress Photo",
-      "description": "Before and after progress photos for students",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "studentId": { "type": "string" },
-        "url": { "type": "string" },
-        "type": { "type": "string", "enum": ["before", "after"] },
-        "date": { "type": "string", "format": "date-time" },
-        "note": { "type": "string" }
-      },
-      "required": ["studentId", "url", "type", "date"]
+      "required": ["uid", "email", "name", "role", "status"]
     },
     "Instructor": {
-      "title": "Instructor Details",
-      "description": "Extended information for instructors",
+      "title": "Instructor",
+      "description": "Detailed information for instructor users.",
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
         "phone": { "type": "string" },
         "plan": { "type": "string" },
         "paymentStatus": { "type": "string", "enum": ["pending", "approved", "rejected"] },
-        "lastPaymentDate": { "type": "string", "format": "date-time" }
+        "experiencia": { "type": "string" },
+        "especialidade": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["userId", "plan", "paymentStatus"]
+      "required": ["userId", "phone", "plan", "paymentStatus"]
     },
     "Student": {
-      "title": "Student Details",
-      "description": "Student relationship with instructor and access status",
+      "title": "Student",
+      "description": "Information linking a student to an instructor and their progress.",
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
         "instructorId": { "type": "string" },
         "accessReleased": { "type": "boolean" },
-        "status": { "type": "string", "enum": ["active", "inactive"] }
+        "status": { "type": "string", "enum": ["active", "blocked", "deleted"] },
+        "plan": { "type": "string" },
+        "points": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["userId", "instructorId", "accessReleased"]
+      "required": ["userId", "status", "points"]
     },
     "PaymentApproval": {
-      "title": "Payment Approval Request",
-      "description": "Request for admin to approve a payment",
+      "title": "Payment Approval",
+      "description": "Request for admin to approve an instructor's payment/plan.",
       "type": "object",
       "properties": {
         "instructorId": { "type": "string" },
-        "instructorName": { "type": "string" },
         "plan": { "type": "string" },
-        "amount": { "type": "number" },
         "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
         "createdAt": { "type": "string", "format": "date-time" }
-      }
-    },
-    "Message": {
-      "title": "Direct Message",
-      "description": "Communication between users",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "fromId": { "type": "string" },
-        "fromName": { "type": "string" },
-        "toId": { "type": "string" },
-        "content": { "type": "string" },
-        "type": { "type": "string", "enum": ["support", "chat"] },
-        "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["fromId", "toId", "content", "type"]
+      "required": ["instructorId", "plan", "status"]
     },
     "Notification": {
-      "title": "System Notification",
-      "description": "Alerts for admin or other users",
+      "title": "Notification",
+      "description": "System or user notifications.",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
         "toId": { "type": "string" },
         "title": { "type": "string" },
         "message": { "type": "string" },
@@ -97,9 +73,59 @@
       },
       "required": ["toId", "title", "message", "read"]
     },
+    "Message": {
+      "title": "Message",
+      "description": "Inter-user messages or support chats.",
+      "type": "object",
+      "properties": {
+        "fromId": { "type": "string" },
+        "fromName": { "type": "string" },
+        "toId": { "type": "string" },
+        "content": { "type": "string" },
+        "type": { "type": "string", "enum": ["chat", "support"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fromId", "toId", "content", "type"]
+    },
+    "ProgressPhoto": {
+      "title": "Progress Photo",
+      "description": "Photos uploaded by students to track changes.",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "url": { "type": "string" },
+        "type": { "type": "string", "enum": ["before", "after"] },
+        "date": { "type": "string", "format": "date-time" }
+      },
+      "required": ["studentId", "url", "type"]
+    },
+    "Workout": {
+      "title": "Workout",
+      "description": "The current workout plan for a student.",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "workout": { "type": "object" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["studentId", "workout"]
+    },
+    "WorkoutSession": {
+      "title": "Workout Session",
+      "description": "A completed workout session with points and results.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "rewardPoints": { "type": "number" },
+        "duration": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "studentId"]
+    },
     "Plan": {
-      "title": "Subscription Plan",
-      "description": "Configurable subscription tiers for instructors",
+      "title": "Plan",
+      "description": "Available subscription plans for instructors.",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
@@ -108,51 +134,68 @@
         "currency": { "type": "string" },
         "features": { "type": "array", "items": { "type": "string" } },
         "active": { "type": "boolean" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["name", "price", "active"]
+      "required": ["id", "name", "price", "active"]
+    },
+    "SystemLog": {
+      "title": "System Log",
+      "description": "Logs for debugging and auditing.",
+      "type": "object",
+      "properties": {
+        "error": { "type": "string" },
+        "operationType": { "type": "string" },
+        "path": { "type": "string" },
+        "userId": { "type": "string" },
+        "serverTime": { "type": "string", "format": "date-time" }
+      }
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "User",
-      "description": "Core user document for authentication and permissions"
+      "description": "User profiles by UID."
     },
-    "/instructors/{instructorId}": {
+    "/instructors/{userId}": {
       "schema": "Instructor",
-      "description": "Detailed instructor metadata"
+      "description": "Instructor details by UID."
     },
-    "/students/{studentId}": {
+    "/students/{userId}": {
       "schema": "Student",
-      "description": "Mapping of students to instructors and their access"
+      "description": "Student details by UID."
     },
-    "/payment_approvals/{approvalId}": {
+    "/payment_approvals/{userId}": {
       "schema": "PaymentApproval",
-      "description": "Queue for admin to approve new instructor payments"
-    },
-    "/messages/{messageId}": {
-      "schema": "Message",
-      "description": "Chat messages between users"
+      "description": "Payment approval requests for instructors."
     },
     "/notifications/{notificationId}": {
       "schema": "Notification",
-      "description": "User or admin alerts"
+      "description": "Notifications collection."
+    },
+    "/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Direct messages and support logs."
     },
     "/progress_photos/{photoId}": {
       "schema": "ProgressPhoto",
-      "description": "Student progress tracking images"
+      "description": "Student progress photos."
     },
     "/workouts/{studentId}": {
-      "schema": "object",
-      "description": "Student training plan"
+      "schema": "Workout",
+      "description": "Current workout for a student."
     },
     "/workout_sessions/{sessionId}": {
-      "schema": "object",
-      "description": "History of completed workout sessions"
+      "schema": "WorkoutSession",
+      "description": "Log of completed workouts."
     },
     "/plans/{planId}": {
       "schema": "Plan",
-      "description": "Configurable subscription tiers managed by admin"
+      "description": "Plans available for subscription."
+    },
+    "/system_logs/{logId}": {
+      "schema": "SystemLog",
+      "description": "Internal error and action logs."
     }
   }
 }

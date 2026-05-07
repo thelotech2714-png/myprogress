@@ -13,47 +13,100 @@ export const PermissionGate: React.FC<PermissionGateProps> = ({ children }) => {
   const [isMobile, setIsMobile] = useState(false);
 
   const check = useCallback(async () => {
-    const info = await Device.getInfo();
-    const mobile = info.platform !== 'web';
-    setIsMobile(mobile);
+    try {
+      // Check if user already skipped this before
+      const hasSkipped = localStorage.getItem('permissions_skipped');
+      if (hasSkipped === 'true') {
+        setStatus('granted');
+        return;
+      }
 
-    if (!mobile) {
-      setStatus('granted');
-      return;
+      const info = await Device.getInfo();
+      const mobile = info.platform !== 'web';
+      setIsMobile(mobile);
+
+      // If on web (Vercel), always grant immediately
+      if (!mobile) {
+        setStatus('granted');
+        return;
+      }
+
+      // On mobile, try a quick check
+      const granted = await permissionService.checkAllPermissions();
+      
+      if (granted) {
+        setStatus('granted');
+      } else {
+        setStatus('missing');
+      }
+    } catch (error) {
+      console.error('Initial permission check failed:', error);
+      setStatus('granted'); 
     }
-
-    const granted = await permissionService.checkAllPermissions();
-    setStatus(granted ? 'granted' : 'missing');
   }, []);
 
   useEffect(() => {
+    // Safety check: if after 1 second it's still checking, force granted
+    const safetyTimeout = setTimeout(() => {
+      if (status === 'checking') {
+        setStatus('granted');
+      }
+    }, 1000);
+
     check();
 
     // Listen for app state changes (user coming back from settings)
     const setupListener = async () => {
-      const listener = await App.addListener('appStateChange', ({ isActive }) => {
-        if (isActive) {
-          check();
-        }
-      });
-      return listener;
+      try {
+        const listener = await App.addListener('appStateChange', ({ isActive }) => {
+          if (isActive) {
+            check();
+          }
+        });
+        return listener;
+      } catch (e) {
+        console.error('Failed to setup App state listener:', e);
+        return { remove: () => {} };
+      }
     };
 
     const listenerPromise = setupListener();
 
     return () => {
+      clearTimeout(safetyTimeout);
       listenerPromise.then(l => l.remove());
     };
-  }, [check]);
+  }, [check, status]);
 
-  const handleRequest = async () => {
+  const handleSkip = () => {
+    localStorage.setItem('permissions_skipped', 'true');
+    setStatus('granted');
+  };
+
+  const handlePermissoes = async () => {
     setStatus('checking');
-    const success = await permissionService.requestAllPermissions();
-    if (success) {
-      setStatus('granted');
-    } else {
-      // If still missing after request, it means user probably denied permanently
-      setStatus('denied');
+    try {
+      console.log('Iniciando solicitação de permissões...');
+      // Set a timeout to avoid hanging forever
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Permission request timed out')), 10000)
+      );
+      
+      const success = await Promise.race([
+        permissionService.requestAllPermissions(),
+        timeoutPromise
+      ]) as boolean;
+      
+      if (success) {
+        console.log('Todas as permissões concedidas!');
+        setStatus('granted');
+      } else {
+        console.log('Permissões negadas pelo usuário.');
+        setStatus('missing'); // Stay on missing but user can skip
+      }
+    } catch (error) {
+      console.error('Erro ao processar permissões:', error);
+      setStatus('granted'); // Fallback on error to unblock user
     }
   };
 
@@ -109,23 +162,37 @@ export const PermissionGate: React.FC<PermissionGateProps> = ({ children }) => {
             </div>
           </div>
 
-          {status === 'denied' ? (
-            <button 
-              onClick={handleOpenSettings}
-              className="w-full py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-lg shadow-blue-200/50 hover:bg-blue-700 transition-all flex items-center justify-center gap-2 group"
-            >
-              <Settings className="w-5 h-5" />
-              Abrir Configurações
-            </button>
-          ) : (
-            <button 
-              onClick={handleRequest}
-              className="w-full py-4 bg-slate-900 text-white font-bold rounded-2xl shadow-blue-200/50 hover:bg-slate-800 transition-all flex items-center justify-center gap-2 group"
-            >
-              Configurar Agora
-              <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </button>
-          )}
+          {status === 'missing' || status === 'denied' ? (
+            <div className="space-y-3">
+              {status === 'denied' ? (
+                <button 
+                  onClick={handleOpenSettings}
+                  id="btn-settings"
+                  className="w-full py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-lg shadow-blue-200/50 hover:bg-blue-700 transition-all flex items-center justify-center gap-2 group"
+                >
+                  <Settings className="w-5 h-5" />
+                  Abrir Configurações
+                </button>
+              ) : (
+                <button 
+                  onClick={handlePermissoes}
+                  id="btn-permissions"
+                  className="w-full py-4 bg-slate-900 text-white font-bold rounded-2xl shadow-blue-200/50 hover:bg-slate-800 transition-all flex items-center justify-center gap-2 group"
+                >
+                  Configurar Agora
+                  <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </button>
+              )}
+              
+              <button 
+                onClick={handleSkip}
+                id="btn-skip"
+                className="w-full py-4 bg-white text-slate-400 font-medium rounded-2xl border border-transparent hover:text-slate-600 transition-all"
+              >
+                Continuar sem as permissões
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
     );

@@ -432,6 +432,20 @@ export const firebaseService = {
     }
   },
 
+  async saveWorkoutSession(studentId: string, sessionData: any) {
+    const id = `sess_${Date.now()}`;
+    try {
+      await setDoc(doc(db, 'workout_sessions', id), {
+        id,
+        studentId,
+        ...sessionData,
+        createdAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `workout_sessions/${id}`);
+    }
+  },
+
   // --- Leveling & Ranking ---
   calculateLevel(points: number) {
     const levels = [

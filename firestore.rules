@@ -2,115 +2,149 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // --- Helpers ---
+    // --- Primitives & Helpers ---
+    
     function isSignedIn() { return request.auth != null; }
-    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
     function isAdmin() { 
       return isSignedIn() && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-        request.auth.token.email.matches('.*thelo\\.tech2714@gmail\\.com$') ||
-        request.auth.token.email.matches('.*jeferson\\.executiva\\.net@gmail\\.com$')
-      );
+        request.auth.token.email in ['thelo.tech2714@gmail.com', 'jeferson.executiva.net@gmail.com']
+      ); 
     }
-    function isInstructor() {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'instructor';
-    }
-    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
-
-    // --- Safety Net ---
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    
+    // --- Global Deny ---
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // --- System Logs ---
-    match /system_logs/{logId} {
-      allow create: if isSignedIn();
-      allow read: if isAdmin();
-    }
-
-    // --- Users Collection ---
+    // --- Users ---
     match /users/{userId} {
-      allow get: if isOwner(userId) || isAdmin() || isInstructor();
+      function isValidUser(data) {
+        return data.uid is string && data.uid == userId &&
+               data.email is string && data.email.size() <= 100 &&
+               data.name is string && data.name.size() <= 100 &&
+               data.role in ['student', 'instructor', 'admin'] &&
+               data.status in ['active', 'pending', 'blocked'] &&
+               data.points is number;
+      }
+
+      allow get: if isSignedIn(); // Profiles are public enough for members to see names
       allow list: if isAdmin();
-      allow create: if isSignedIn() && isOwner(userId) && 
-        incoming().role == 'student' && 
-        incoming().status == 'pending';
+      
+      allow create: if isSignedIn() && isValidUser(incoming()) && (
+        // Self-registration: force roles and status
+        (incoming().role != 'admin' && incoming().status == 'pending' && incoming().points == 0) ||
+        isAdmin()
+      );
+      
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        (isOwner(userId) && isValidUser(incoming()) && (
+          // Action: Edit Profile
+          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'photoURL'])
+        ))
+      );
+    }
+
+    // --- Instructors ---
+    match /instructors/{userId} {
+      function isValidInstructor(data) {
+        return data.userId == userId &&
+               data.phone is string && data.phone.size() <= 20 &&
+               data.plan is string &&
+               data.paymentStatus in ['pending', 'approved', 'rejected'];
+      }
+
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
+      
+      allow create: if isOwner(userId) && isValidInstructor(incoming()) && 
+                       incoming().paymentStatus == 'pending';
+      
       allow update: if isAdmin() || (
-        isOwner(userId) && 
-        isValidUpdateAction(existing(), incoming())
+        isOwner(userId) && isValidInstructor(incoming()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['phone', 'experiencia', 'especialidade', 'updatedAt'])
       );
     }
 
-    function isValidUpdateAction(existing, incoming) {
-      let allowedKeys = ['name', 'photoURL', 'fcmTokens', 'updatedAt', 'points'];
-      let isBasicUpdate = incoming.diff(existing).affectedKeys().hasOnly(['name', 'photoURL', 'fcmTokens', 'updatedAt']);
-      let isPointIncrement = incoming.diff(existing).affectedKeys().hasOnly(['points', 'updatedAt']) && 
-                             incoming.points >= existing.points && 
-                             incoming.points <= existing.points + 1000;
+    // --- Students ---
+    match /students/{userId} {
+      function isValidStudent(data) {
+        return data.userId == userId &&
+               data.status in ['active', 'blocked', 'deleted'] &&
+               data.points is number;
+      }
+
+      allow get: if isOwner(userId) || (isSignedIn() && existing().instructorId == request.auth.uid) || isAdmin();
+      allow list: if isSignedIn() && (resource.data.instructorId == request.auth.uid || isAdmin());
       
-      return isBasicUpdate || isPointIncrement;
-    }
-
-    // --- Instructors Collection ---
-    match /instructors/{instructorId} {
-      allow read: if isOwner(instructorId) || isAdmin();
-      allow write: if isOwner(instructorId) || isAdmin();
-    }
-
-    // --- Students Collection ---
-    match /students/{studentId} {
-      allow read: if isSignedIn() && (
-        isOwner(studentId) || 
-        isAdmin() || 
-        isInstructor() && existing().instructorId == request.auth.uid
+      allow create: if isAdmin() || (isSignedIn() && incoming().instructorId == request.auth.uid);
+      
+      allow update: if isAdmin() || (
+        isSignedIn() && (
+          // Case 1: Student completing workout (points)
+          (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['points', 'updatedAt']) && 
+           incoming().points <= existing().points + 1000) ||
+          // Case 2: Instructor management
+          (existing().instructorId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'accessReleased', 'plan']))
+        )
       );
-      
-      allow update: if (
-        isAdmin() || 
-        isInstructor() && existing().instructorId == request.auth.uid ||
-        (isOwner(studentId) && isValidUpdateAction(existing(), incoming()))
-      );
-      
-      allow create: if isAdmin() || isInstructor();
-    }
-
-    // --- Workouts & Sessions ---
-    match /workouts/{studentId} {
-      allow read: if isOwner(studentId) || isAdmin() || (isInstructor() && get(/databases/$(database)/documents/students/$(studentId)).data.instructorId == request.auth.uid);
-      allow write: if isAdmin() || (isInstructor() && get(/databases/$(database)/documents/students/$(studentId)).data.instructorId == request.auth.uid);
-    }
-
-    match /workout_sessions/{sessionId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && incoming().studentId == request.auth.uid;
-      allow update, delete: if isAdmin();
-    }
-
-    // --- Messaging ---
-    match /messages/{messageId} {
-      allow read: if isSignedIn() && (resource.data.fromId == request.auth.uid || resource.data.toId == request.auth.uid);
-      allow create: if isSignedIn() && incoming().fromId == request.auth.uid;
     }
 
     // --- Payment Approvals ---
-    match /payment_approvals/{approvalId} {
-      allow read: if isAdmin() || (isSignedIn() && resource.data.instructorId == request.auth.uid);
-      allow create: if isSignedIn();
+    match /payment_approvals/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && incoming().status == 'pending';
       allow update: if isAdmin();
     }
 
     // --- Notifications ---
-    match /notifications/{notificationId} {
-      allow read: if isSignedIn() && resource.data.toId == request.auth.uid;
-      allow write: if isAdmin() || (isSignedIn() && incoming().toId == request.auth.uid);
+    match /notifications/{id} {
+      allow read: if isSignedIn() && (existing().toId == request.auth.uid || existing().toId == 'admin' && isAdmin());
+      allow create: if isSignedIn(); // Anyone can trigger a notification (e.g. system logs do it)
+      allow update: if isSignedIn() && (existing().toId == request.auth.uid || isAdmin()) && 
+                       incoming().diff(existing()).affectedKeys().hasOnly(['read']);
     }
 
-    // --- Subscription Plans ---
-    match /plans/{planId} {
-      allow read: if isSignedIn();
+    // --- Messages ---
+    match /messages/{id} {
+      allow read: if isSignedIn() && (existing().toId == request.auth.uid || existing().fromId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && incoming().fromId == request.auth.uid;
+    }
+
+    // --- Progress Photos ---
+    match /progress_photos/{id} {
+      allow read: if isSignedIn() && (isOwner(existing().studentId) || (get(/databases/$(database)/documents/students/$(existing().studentId)).data.instructorId == request.auth.uid) || isAdmin());
+      allow create: if isOwner(incoming().studentId);
+    }
+
+    // --- Workouts ---
+    match /workouts/{studentId} {
+      allow read: if isOwner(studentId) || (isSignedIn() && (get(/databases/$(database)/documents/students/$(studentId)).data.instructorId == request.auth.uid)) || isAdmin();
+      allow write: if isAdmin() || (isSignedIn() && (get(/databases/$(database)/documents/students/$(studentId)).data.instructorId == request.auth.uid));
+    }
+
+    // --- Workout Sessions ---
+    match /workout_sessions/{id} {
+      allow read: if isSignedIn() && (isOwner(existing().studentId) || isAdmin());
+      allow create: if isOwner(incoming().studentId);
+    }
+
+    // --- Plans ---
+    match /plans/{id} {
+      allow read: if true;
       allow write: if isAdmin();
+    }
+
+    // --- System Logs ---
+    match /system_logs/{id} {
+      allow create: if isSignedIn();
+      allow read: if isAdmin();
     }
   }
 }

@@ -75,7 +75,7 @@ export default function App() {
             }
 
             setUser({
-              id: fbUser.uid,
+              uid: fbUser.uid,
               name: profile.name || email.split('@')[0] || 'Usuário',
               email: email,
               role: finalRole,

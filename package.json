@@ -4,10 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --port=3000 --host=0.0.0.0",
+    "dev": "tsx server.ts",
     "build": "vite build",
-    "build:android": "npm run build && npx cap sync android && npx cap build android --androidreleasetype APK",
-    "build:android:release": "npm run build && npx cap sync android && npx cap build android --androidreleasetype APK --keystorepath ...",
+    "android": "npm run build && npx cap sync android && npx cap open android",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"

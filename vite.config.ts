@@ -7,25 +7,30 @@ export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
     plugins: [react(), tailwindcss()],
+    base: './',
     build: {
-      chunkSizeWarningLimit: 1000,
+      outDir: 'dist',
+      assetsDir: 'assets',
+      emptyOutDir: true,
+      target: 'es2017', 
+      minify: 'esbuild',
+      cssCodeSplit: false,
+      chunkSizeWarningLimit: 5000, // Reduced chunk splitting
       rollupOptions: {
         output: {
-          manualChunks: {
-            'vendor': ['react', 'react-dom', 'react-router-dom'],
-            'firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
-            'pose-detection': ['@tensorflow-models/pose-detection', '@tensorflow/tfjs-core', '@tensorflow/tfjs-backend-webgl', '@tensorflow/tfjs-converter'],
-            'mediapipe': ['@mediapipe/pose'],
-          }
+          // Simplified chunking for stability
+          manualChunks: undefined, 
         }
       }
     },
     define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || ''),
+      // Fix for some libraries expecting global
+      'global': 'window',
     },
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(__dirname, './src'),
       },
     },
     server: {

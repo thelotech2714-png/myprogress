@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { callGeminiProxy } from '@/lib/ai-proxy';
 
 /**
  * Use Case: Generating AI Wellness Tips
@@ -7,9 +7,6 @@ import { GoogleGenAI } from '@google/genai';
 export const wellnessUseCase = {
   getPersonalizedTip: async (userData: any) => {
     try {
-      const genAI = new GoogleGenAI(import.meta.env.VITE_GEMINI_API_KEY || '');
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
       const prompt = `
         Você é um Personal Trainer e Coach de Bem-Estar de alto nível.
         Analise os dados do atleta:
@@ -22,9 +19,8 @@ export const wellnessUseCase = {
         Responda apenas a dica, sem introduções.
       `;
 
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      return response.text().trim();
+      const text = await callGeminiProxy(prompt);
+      return text?.trim() || "Foco no objetivo! Cada drop de suor é um passo rumo à sua melhor versão.";
     } catch (error) {
       console.error('Wellness Use Case Error:', error);
       return "Foco no objetivo! Cada drop de suor é um passo rumo à sua melhor versão.";

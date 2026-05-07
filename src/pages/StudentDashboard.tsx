@@ -18,7 +18,7 @@ import {
   Sparkles,
   Activity,
   X,
-  Camera,
+  Camera as CameraIcon,
   Droplets,
   Home,
   MessageSquare,
@@ -37,6 +37,9 @@ import { StudentBooking } from '../components/StudentBooking';
 import { PoseDetectionCamera } from '../components/PoseDetectionCamera';
 import { WaterTracker } from '../components/WaterTracker';
 import { HomeWorkout } from '../components/HomeWorkout';
+import { Camera, CameraResultType } from '@capacitor/camera';
+import { Device } from '@capacitor/device';
+import { wellnessUseCase } from '../domain/useCases/wellnessUseCase';
 
 import { auth, db } from '../services/firebase';
 import { onSnapshot, collection, query, where, orderBy, limit, doc } from 'firebase/firestore';
@@ -171,7 +174,7 @@ export const StudentDashboard: React.FC = () => {
       const image = await Camera.getPhoto({
         quality: 90,
         allowEditing: true,
-        resultType: 'base64',
+        resultType: CameraResultType.Base64,
         width: 500,
         height: 500
       });
@@ -206,7 +209,7 @@ export const StudentDashboard: React.FC = () => {
               onClick={handleProfilePhotoUpdate}
               className="absolute -bottom-1 -right-1 p-1.5 bg-blue-600 text-white rounded-lg shadow-lg cursor-pointer hover:bg-blue-700 transition-all"
             >
-              <Camera className="w-3 h-3" />
+              <CameraIcon className="w-3 h-3" />
               <input 
                 id="profile-photo-input"
                 type="file" 
@@ -248,7 +251,7 @@ export const StudentDashboard: React.FC = () => {
             onClick={() => setIsProgressModalOpen(true)}
             className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl font-bold text-xs uppercase tracking-tight flex items-center gap-2 hover:bg-indigo-100 transition-all border border-indigo-100"
           >
-            <Camera className="w-4 h-4" />
+            <CameraIcon className="w-4 h-4" />
             Antes e Depois
           </button>
           {messages.length > 0 && (
@@ -452,7 +455,7 @@ export const StudentDashboard: React.FC = () => {
          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
                <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg shadow-indigo-500/20">
-                  <Camera className="w-5 h-5 text-white" />
+                  <CameraIcon className="w-5 h-5 text-white" />
                </div>
                <div>
                   <h3 className="text-xl font-bold text-slate-900">Treinar com IA Vision</h3>
@@ -808,7 +811,7 @@ export const StudentDashboard: React.FC = () => {
                      <div className="grid grid-cols-2 gap-4">
                         {progressPhotos.filter(p => p.type === 'before').length === 0 ? (
                           <div className="col-span-2 aspect-video bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center text-slate-400">
-                             <Camera className="w-8 h-8 mb-2 opacity-20" />
+                             <CameraIcon className="w-8 h-8 mb-2 opacity-20" />
                              <p className="text-[10px] font-bold uppercase tracking-widest">Nenhuma foto</p>
                           </div>
                         ) : (
@@ -839,7 +842,7 @@ export const StudentDashboard: React.FC = () => {
                      <div className="grid grid-cols-2 gap-4">
                         {progressPhotos.filter(p => p.type === 'after').length === 0 ? (
                           <div className="col-span-2 aspect-video bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center text-slate-400">
-                             <Camera className="w-8 h-8 mb-2 opacity-20" />
+                             <CameraIcon className="w-8 h-8 mb-2 opacity-20" />
                              <p className="text-[10px] font-bold uppercase tracking-widest">Nenhuma foto</p>
                           </div>
                         ) : (

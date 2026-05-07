@@ -6,10 +6,10 @@ import { App } from '@capacitor/app';
 
 export const permissionService = {
   async checkAllPermissions() {
-    const info = await Device.getInfo();
-    if (info.platform === 'web') return true;
-
     try {
+      const info = await Device.getInfo();
+      if (info.platform === 'web') return true;
+
       const camera = await Camera.checkPermissions();
       const geo = await Geolocation.checkPermissions();
       
@@ -17,9 +17,10 @@ export const permissionService = {
       let pushGranted = true;
       try {
         const push = await PushNotifications.checkPermissions();
-        pushGranted = push.receive === 'granted';
+        // Be lenient: only consider it not granted if it's explicitly denied
+        pushGranted = push.receive !== 'denied'; 
       } catch (e) {
-        // Might fail on some platforms/versions, ignore if fails
+        console.warn('Push permissions check failed:', e);
       }
 
       return (
@@ -29,14 +30,19 @@ export const permissionService = {
       );
     } catch (e) {
       console.error('Error checking permissions:', e);
-      return false;
+      // Fallback to true on errors to avoid blocking the app completely if a plugin fails
+      return true; 
     }
   },
 
   async openSettings() {
     const info = await Device.getInfo();
     if (info.platform !== 'web') {
-      await App.openAppSettings();
+      try {
+        await (App as any).openAppSettings();
+      } catch (e) {
+        console.error('Error opening app settings:', e);
+      }
     }
   },
 
@@ -55,26 +61,40 @@ export const permissionService = {
   },
 
   async requestAllPermissions() {
-    const info = await Device.getInfo();
-    if (info.platform === 'web') return true;
-
     try {
-      // Camera
-      await Camera.requestPermissions();
-      
-      // Geolocation
-      await Geolocation.requestPermissions();
+      const info = await Device.getInfo();
+      if (info.platform === 'web') return true;
 
-      // Push Notifications
-      const pushStatus = await PushNotifications.checkPermissions();
-      if (pushStatus.receive !== 'granted') {
-        await PushNotifications.requestPermissions();
+      // Camera - Explicitly request camera
+      console.log('Requesting camera permission...');
+      try {
+        await Camera.requestPermissions({ permissions: ['camera'] });
+      } catch (e) {
+        console.warn('Camera request failed:', e);
+      }
+      
+      // Geolocation - Explicitly request location
+      console.log('Requesting geolocation permission...');
+      try {
+        await Geolocation.requestPermissions();
+      } catch (e) {
+        console.warn('Geolocation request failed:', e);
+      }
+
+      // Push Notifications - Optional but recommended if configured
+      try {
+        const pushStatus = await PushNotifications.checkPermissions();
+        if (pushStatus.receive !== 'granted') {
+          await PushNotifications.requestPermissions();
+        }
+      } catch (e) {
+        console.warn('Push permissions request failed:', e);
       }
 
       return await this.checkAllPermissions();
     } catch (e) {
       console.error('Error requesting permissions:', e);
-      return false;
+      return true; // Fallback to avoid blocking
     }
   }
 };
